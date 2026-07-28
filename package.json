@@ -1,0 +1,25 @@
+{
+  "name": "case-editor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "migrate": "node scripts/migrate.js",
+    "check": "node --check script.js && node --check mobile-ui.js && node --check server.js && node --check scripts/migrate.js && node --check scripts/mobile-layout-check.js",
+    "test": "node --test",
+    "test:mobile": "node scripts/mobile-layout-check.js",
+    "make-admin": "node scripts/make-admin.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.11.5",
+    "nodemailer": "^9.0.3"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.61.1"
+  }
+}

@@ -1,0 +1,44 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.agents/
+tmp/
+__pycache__/
+*.py[cod]
+uploads/*
+!uploads/.gitkeep
+
+# Secrets and private keys
+*.pem
+*.key
+*.p12
+*.pfx
+.ssh/
+
+# Databases, dumps and backups
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sql
+*.dump
+backup/
+backups/
+*.bak
+
+# Generated archives and reports
+*.zip
+*.tar
+*.tgz
+coverage/
+
+# Logs and OS/editor files
+server.log
+server.err
+server-*.log
+server-*.err
+*.log
+*.err
+.DS_Store
+Thumbs.db

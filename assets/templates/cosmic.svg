@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 960">
+  <defs>
+    <radialGradient id="g" cx=".3" cy=".2" r=".9">
+      <stop offset="0" stop-color="#91c9e8"/>
+      <stop offset=".46" stop-color="#25314f"/>
+      <stop offset="1" stop-color="#121826"/>
+    </radialGradient>
+  </defs>
+  <rect width="720" height="960" fill="url(#g)"/>
+  <g fill="rgba(255,255,255,.85)">
+    <circle cx="104" cy="150" r="4"/>
+    <circle cx="214" cy="346" r="3"/>
+    <circle cx="540" cy="250" r="5"/>
+    <circle cx="610" cy="630" r="3"/>
+    <circle cx="360" cy="725" r="4"/>
+    <circle cx="126" cy="760" r="2"/>
+  </g>
+  <circle cx="420" cy="455" r="150" fill="rgba(145,201,232,.28)"/>
+  <circle cx="384" cy="420" r="116" fill="rgba(255,255,255,.11)"/>
+  <text x="360" y="518" text-anchor="middle" font-family="Arial, sans-serif" font-size="72" font-weight="800" fill="rgba(255,255,255,.88)">Космос</text>
+</svg>

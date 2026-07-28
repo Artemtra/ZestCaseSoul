@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /uploads/
+Disallow: /login
+Disallow: /register
+Disallow: /profile
+Disallow: /designs
+Disallow: /orders
+
+Sitemap: https://zestcasesoul.ru/sitemap.xml

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f4efe7" />
+  <meta name="robots" content="noindex, follow" />
+  <title>404 - Страница не найдена | ZestCaseSoul</title>
+  <style>
+    :root { --paper:#f4efe7; --ink:#151716; --muted:#716b63; --coral:#e96543; --coral-dark:#bd4429; --eye:#b9ef67; }
+    * { box-sizing:border-box; }
+    html,body { min-height:100%; }
+    body { margin:0; overflow-x:hidden; color:var(--ink); background:radial-gradient(circle at 15% 10%,rgba(255,255,255,.92),transparent 28rem),radial-gradient(circle at 87% 73%,rgba(233,101,67,.13),transparent 31rem),var(--paper); font-family:ui-rounded,"Trebuchet MS","Segoe UI",sans-serif; }
+    .page { position:relative; isolation:isolate; min-height:100vh; min-height:100svh; display:grid; grid-template-rows:auto 1fr auto; gap:18px; padding:clamp(20px,4vw,52px); overflow:hidden; }
+    .grain { position:fixed; inset:0; z-index:-2; opacity:.13; pointer-events:none; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.2'/%3E%3C/svg%3E"); mix-blend-mode:multiply; }
+    .topbar,.footer { width:min(1180px,100%); margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:18px; font-size:12px; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
+    .brand { display:inline-flex; align-items:center; gap:10px; color:var(--ink); text-decoration:none; }
+    .brand-mark { display:grid; place-items:center; width:30px; height:30px; border-radius:10px; color:#fff; background:var(--coral); box-shadow:4px 4px 0 var(--ink); font-size:11px; letter-spacing:-.04em; }
+    .status { color:var(--muted); }
+    .hero { width:min(1180px,100%); margin:0 auto; display:grid; place-items:center; align-content:center; padding:clamp(10px,3vh,32px) 0; }
+    .stage { position:relative; width:min(1040px,100%); min-height:min(670px,70vh); display:grid; place-items:center; }
+    .error-code { position:absolute; top:0; left:50%; z-index:-1; margin:0; color:transparent; font-size:clamp(142px,30vw,430px); font-weight:950; letter-spacing:-.12em; line-height:.78; transform:translateX(-50%); -webkit-text-stroke:clamp(2px,.32vw,5px) var(--ink); text-shadow:0 13px 0 rgba(21,23,22,.035); user-select:none; }
+    .cat-wrap { position:relative; width:min(470px,90vw); margin-top:clamp(105px,17vw,210px); display:grid; place-items:center; filter:drop-shadow(0 28px 18px rgba(21,23,22,.17)); }
+    .cat-scene { position:relative; width:400px; height:520px; transform:translateY(25px); }
+    .cat-ground-shadow { position:absolute; bottom:25px; left:79px; width:245px; height:35px; border-radius:50%; background:rgba(21,23,22,.22); filter:blur(10px); }
+    .cat-tail { position:absolute; z-index:1; bottom:64px; left:214px; width:155px; height:195px; border:23px solid #090b0f; border-top-color:transparent; border-left-color:transparent; border-radius:20% 50% 50% 55%; transform-origin:25px 165px; animation:curious-tail 3.8s ease-in-out infinite; }
+    .cat-tail-tip { position:absolute; top:-8px; right:-11px; width:27px; height:56px; border-radius:50%; background:#090b0f; transform:rotate(-30deg); }
+    .cat-body { position:absolute; z-index:2; bottom:62px; left:118px; width:166px; height:285px; border-radius:48% 48% 33% 33% / 40% 40% 20% 20%; background:radial-gradient(circle at 50% 20%,#242831 0%,#11141a 42%,#07090c 85%); box-shadow:inset 15px 0 18px rgba(255,255,255,.035),inset -15px 0 20px rgba(0,0,0,.7); }
+    .cat-chest { position:absolute; z-index:3; bottom:86px; left:175px; width:54px; height:235px; border-radius:50%; background:linear-gradient(90deg,transparent,rgba(91,101,120,.25),transparent); }
+    .cat-back-leg { position:absolute; z-index:3; bottom:50px; width:108px; height:100px; border-radius:55% 55% 38% 38%; background:#090b0f; }
+    .cat-back-leg-left { left:86px; transform:rotate(-8deg); } .cat-back-leg-right { right:80px; transform:rotate(8deg); }
+    .cat-front-leg { position:absolute; z-index:5; bottom:53px; width:28px; height:230px; border-radius:40% 40% 45% 45%; background:linear-gradient(90deg,#06080b,#161a21,#080a0d); }
+    .cat-front-leg-left { left:157px; transform:rotate(2deg); } .cat-front-leg-right { right:157px; transform:rotate(-2deg); }
+    .cat-paw { position:absolute; bottom:-4px; left:-9px; width:46px; height:27px; border-radius:55% 55% 45% 45%; background:#080a0d; } .cat-paw::before,.cat-paw::after { position:absolute; bottom:4px; width:1px; height:11px; content:""; background:rgba(144,155,174,.35); } .cat-paw::before { left:16px; } .cat-paw::after { right:16px; }
+    .cat-neck { position:absolute; z-index:4; top:160px; left:154px; width:94px; height:130px; border-radius:45%; background:#0b0e12; }
+    .cat-head { position:absolute; z-index:6; top:71px; left:119px; width:164px; height:143px; border-radius:48% 48% 52% 52% / 42% 42% 58% 58%; background:radial-gradient(circle at 50% 35%,#262b34 0%,#11151b 48%,#07090c 100%); box-shadow:inset 10px 2px 15px rgba(255,255,255,.035),0 8px 15px rgba(0,0,0,.2); transform-origin:50% 85%; animation:curious-head 7s ease-in-out infinite; }
+    .cat-ear { position:absolute; z-index:5; top:35px; width:72px; height:105px; background:#090c10; clip-path:polygon(50% 0,100% 100%,0 84%); } .cat-ear::after { position:absolute; inset:18px 17px 15px; content:""; background:linear-gradient(150deg,#6f4b58,#241a21); clip-path:polygon(50% 0,100% 100%,0 84%); opacity:.75; }
+    .cat-ear-left { left:112px; transform:rotate(-17deg); animation:curious-ear-left 5s ease-in-out infinite; } .cat-ear-right { right:108px; transform:scaleX(-1) rotate(-17deg); animation:curious-ear-right 4.2s ease-in-out infinite; }
+    .cat-eyes { position:absolute; top:49px; left:22px; display:flex; justify-content:space-between; width:120px; height:46px; }
+    .cat-eye { position:relative; width:46px; height:39px; overflow:hidden; border-radius:55% 45% 50% 50%; background:radial-gradient(circle at 50% 52%,#dfff65 0%,#b9dc3c 55%,#809d24 100%); box-shadow:0 0 12px rgba(202,255,82,.55),inset 0 -4px 5px rgba(49,75,5,.5); transform-origin:center; animation:curious-blink 5.5s infinite; } .cat-eye-right { border-radius:45% 55% 50% 50%; }
+    .cat-pupil { position:absolute; top:4px; left:17px; width:11px; height:31px; border-radius:50%; background:#020302; transition:transform .12s ease-out; } .cat-pupil::after { position:absolute; top:4px; left:2px; width:3px; height:7px; border-radius:50%; content:""; background:rgba(255,255,255,.85); }
+    .cat-nose { position:absolute; top:96px; left:72px; width:20px; height:14px; border-radius:50% 50% 60% 60%; background:#c87a89; clip-path:polygon(0 0,100% 0,50% 100%); box-shadow:0 2px 5px rgba(255,130,155,.3); } .cat-mouth { position:absolute; top:108px; left:77px; width:11px; height:11px; border-bottom:1px solid #777c85; border-radius:50%; }
+    .cat-whiskers { position:absolute; top:100px; width:80px; height:40px; } .cat-whiskers-left { right:93px; } .cat-whiskers-right { left:93px; transform:scaleX(-1); } .cat-whisker { position:absolute; right:0; width:78px; height:1px; border-radius:50%; background:linear-gradient(90deg,transparent,rgba(220,225,235,.75)); transform-origin:right center; } .cat-whisker:nth-child(1) { top:6px; transform:rotate(8deg); } .cat-whisker:nth-child(2) { top:17px; } .cat-whisker:nth-child(3) { top:29px; transform:rotate(-9deg); }
+    .bubble { position:absolute; top:clamp(150px,18vw,220px); right:max(1%,calc(50% - 452px)); width:min(294px,43vw); padding:20px 22px; border:3px solid var(--ink); border-radius:24px 24px 24px 6px; background:rgba(255,255,255,.92); box-shadow:9px 10px 0 var(--ink); font-size:clamp(18px,2.2vw,27px); font-weight:850; line-height:1.05; transform:rotate(2deg); animation:bubble-in .8s .3s both cubic-bezier(.22,1,.36,1); }
+    .bubble::after { position:absolute; bottom:-21px; left:20px; width:27px; height:28px; content:""; border-bottom:3px solid var(--ink); border-left:3px solid var(--ink); background:#fff; transform:skewY(-35deg) rotate(-11deg); }
+    .content { width:min(680px,100%); margin-top:-12px; text-align:center; } .eyebrow { margin:0 0 9px; color:var(--coral-dark); font-size:12px; font-weight:900; letter-spacing:.18em; text-transform:uppercase; } h1 { margin:0; font-size:clamp(32px,5.3vw,67px); line-height:.98; letter-spacing:-.055em; } .lead { max-width:580px; margin:18px auto 26px; color:var(--muted); font-size:clamp(16px,2vw,20px); line-height:1.58; }
+    .actions { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; } .btn { min-height:52px; display:inline-flex; align-items:center; justify-content:center; gap:10px; padding:0 22px; border:2px solid var(--ink); border-radius:999px; color:var(--ink); background:transparent; cursor:pointer; font:inherit; font-weight:850; text-decoration:none; transition:transform .2s ease,box-shadow .2s ease,background .2s ease; } .btn:hover { transform:translateY(-3px); } .btn:active { transform:translateY(0); } .btn-primary { color:#fff; background:var(--ink); box-shadow:5px 6px 0 var(--coral); } .btn-primary:hover { box-shadow:7px 9px 0 var(--coral); } .btn-secondary:hover { background:rgba(255,255,255,.7); box-shadow:4px 5px 0 var(--ink); } .btn svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:2.2; }
+    .footer { color:var(--muted); letter-spacing:.04em; text-transform:none; } .paw { position:absolute; z-index:-1; width:46px; height:46px; opacity:.1; transform:rotate(var(--rotation)); } .paw::before,.paw::after { position:absolute; border-radius:50%; background:var(--ink); content:""; } .paw::before { top:19px; left:11px; width:25px; height:21px; } .paw::after { top:4px; left:3px; width:9px; height:12px; box-shadow:13px -5px 0 var(--ink),26px 0 0 var(--ink),34px 11px 0 var(--ink); } .paw-one { top:20%; left:5%; --rotation:-28deg; } .paw-two { top:43%; right:6%; --rotation:32deg; } .paw-three { bottom:12%; left:14%; --rotation:19deg; }
+    .toast { position:fixed; bottom:24px; left:50%; z-index:10; max-width:calc(100% - 32px); padding:13px 18px; border:2px solid var(--ink); border-radius:999px; color:#fff; background:var(--ink); box-shadow:4px 5px 0 var(--coral); font-size:14px; font-weight:750; opacity:0; pointer-events:none; transform:translate(-50%,20px); transition:opacity .25s ease,transform .25s ease; } .toast.show { opacity:1; transform:translate(-50%,0); }
+    @keyframes curious-tail { 0%,100% { transform:rotate(-5deg); } 50% { transform:rotate(8deg); } } @keyframes curious-head { 0%,18%,100% { transform:rotate(0); } 27%,43% { transform:rotate(-4deg); } 55%,75% { transform:rotate(4deg); } } @keyframes curious-ear-left { 0%,72%,100% { transform:rotate(-17deg); } 78% { transform:rotate(-24deg); } 84% { transform:rotate(-14deg); } } @keyframes curious-ear-right { 0%,45%,100% { transform:scaleX(-1) rotate(-17deg); } 52% { transform:scaleX(-1) rotate(-25deg); } 59% { transform:scaleX(-1) rotate(-13deg); } } @keyframes curious-blink { 0%,44%,48%,70%,74%,100% { transform:scaleY(1); } 46%,72% { transform:scaleY(.08); } } @keyframes bubble-in { from { opacity:0; transform:translateY(16px) scale(.88) rotate(2deg); } to { opacity:1; transform:translateY(0) scale(1) rotate(2deg); } }
+    @media (max-width:720px) { .page { padding:20px; } .stage { min-height:530px; } .cat-wrap { margin-top:125px; } .cat-scene { transform:translateY(18px) scale(.88); } .bubble { top:118px; right:0; width:min(220px,51vw); padding:15px 16px; box-shadow:6px 7px 0 var(--ink); } .content { margin-top:-24px; } .footer { margin-top:30px; justify-content:center; } .footer span:last-child { display:none; } }
+    @media (max-width:430px) { .status { display:none; } .stage { min-height:485px; } .cat-wrap { width:100vw; margin-top:122px; transform:none; } .cat-scene { transform:translateY(13px) scale(.76); } .bubble { top:108px; right:3px; font-size:16px; } .actions { flex-direction:column; } .btn { width:100%; } }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; transition-duration:.01ms !important; } }
+
+    .corner-cat { position:fixed; right:18px; bottom:18px; z-index:12; width:76px; height:70px; opacity:.82; pointer-events:none; user-select:none; filter:drop-shadow(0 6px 7px rgba(12,18,24,.18)); }
+    .corner-cat-shadow { position:absolute; right:9px; bottom:2px; left:9px; height:10px; border-radius:50%; background:rgba(17,20,24,.2); filter:blur(4px); }
+    .corner-cat-ear { position:absolute; z-index:1; top:5px; width:30px; height:41px; background:#0a0d12; clip-path:polygon(50% 0,100% 100%,0 84%); } .corner-cat-ear::after { position:absolute; inset:8px 7px 6px; content:""; background:linear-gradient(150deg,#6f4b58,#241a21); clip-path:polygon(50% 0,100% 100%,0 84%); opacity:.78; }
+    .corner-cat-ear-left { left:11px; transform:rotate(-16deg); animation:corner-cat-ear-left 5s ease-in-out infinite; } .corner-cat-ear-right { right:10px; transform:scaleX(-1) rotate(-16deg); animation:corner-cat-ear-right 4.2s ease-in-out infinite; }
+    .corner-cat-face { position:absolute; z-index:2; top:19px; left:9px; width:59px; height:51px; border-radius:48% 48% 52% 52% / 42% 42% 58% 58%; background:radial-gradient(circle at 50% 34%,#2b303a 0%,#11151b 52%,#07090c 100%); box-shadow:inset 4px 1px 7px rgba(255,255,255,.05); }
+    .corner-cat-eyes { position:absolute; top:17px; left:8px; display:flex; justify-content:space-between; width:43px; } .corner-cat-eye { position:relative; display:block; width:17px; height:15px; overflow:hidden; border-radius:55% 45% 50% 50%; background:radial-gradient(circle at 50% 52%,#dfff65 0%,#b9dc3c 55%,#809d24 100%); box-shadow:0 0 5px rgba(202,255,82,.5); transform-origin:center; animation:corner-cat-blink 5.5s infinite; } .corner-cat-eye-right { border-radius:45% 55% 50% 50%; }
+    .corner-cat-pupil { position:absolute; top:2px; left:6px; width:4px; height:12px; border-radius:50%; background:#020302; transition:transform .08s linear; } .corner-cat-pupil::after { position:absolute; top:2px; left:1px; width:1px; height:3px; border-radius:50%; content:""; background:rgba(255,255,255,.9); }
+    .corner-cat-nose { position:absolute; top:34px; left:25px; width:8px; height:6px; background:#c87a89; clip-path:polygon(0 0,100% 0,50% 100%); } .corner-cat-mouth { position:absolute; top:39px; left:28px; width:5px; height:4px; border-bottom:1px solid #858b95; border-radius:50%; }
+    .corner-cat-whiskers { position:absolute; top:35px; width:26px; height:15px; } .corner-cat-whiskers-left { right:34px; } .corner-cat-whiskers-right { left:34px; transform:scaleX(-1); } .corner-cat-whiskers i { position:absolute; right:0; display:block; width:26px; height:1px; background:linear-gradient(90deg,transparent,rgba(220,225,235,.68)); transform-origin:right center; } .corner-cat-whiskers i:nth-child(1) { top:2px; transform:rotate(8deg); } .corner-cat-whiskers i:nth-child(2) { top:7px; } .corner-cat-whiskers i:nth-child(3) { top:12px; transform:rotate(-9deg); }
+    @keyframes corner-cat-ear-left { 0%,72%,100% { transform:rotate(-16deg); } 78% { transform:rotate(-23deg); } 84% { transform:rotate(-13deg); } } @keyframes corner-cat-ear-right { 0%,45%,100% { transform:scaleX(-1) rotate(-16deg); } 52% { transform:scaleX(-1) rotate(-24deg); } 59% { transform:scaleX(-1) rotate(-12deg); } } @keyframes corner-cat-blink { 0%,44%,48%,70%,74%,100% { transform:scaleY(1); } 46%,72% { transform:scaleY(.08); } }
+    @media (max-width:720px) { .corner-cat { right:7px; bottom:calc(102px + env(safe-area-inset-bottom)); transform:scale(.82); transform-origin:right bottom; } } @media (prefers-reduced-motion:reduce) { .corner-cat *, .corner-cat *::before, .corner-cat *::after { animation:none !important; transition:none !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="grain" aria-hidden="true"></div><i class="paw paw-one" aria-hidden="true"></i><i class="paw paw-two" aria-hidden="true"></i><i class="paw paw-three" aria-hidden="true"></i>
+    <header class="topbar"><a class="brand" href="/" aria-label="ZestCaseSoul, на главную"><span class="brand-mark" aria-hidden="true">ZCS</span><span>ZestCaseSoul</span></a><span class="status">Ошибка маршрута / 404</span></header>
+    <section class="hero">
+      <div class="stage"><p class="error-code" aria-label="Ошибка 404">404</p><div class="bubble" id="bubble">Пойдём домой?</div>
+        <div class="cat-wrap" aria-hidden="true">
+          <div class="cat-scene">
+            <div class="cat-ground-shadow"></div><div class="cat-tail"><div class="cat-tail-tip"></div></div>
+            <div class="cat-back-leg cat-back-leg-left"></div><div class="cat-back-leg cat-back-leg-right"></div><div class="cat-body"></div><div class="cat-chest"></div><div class="cat-neck"></div>
+            <div class="cat-front-leg cat-front-leg-left"><div class="cat-paw"></div></div><div class="cat-front-leg cat-front-leg-right"><div class="cat-paw"></div></div>
+            <div class="cat-ear cat-ear-left"></div><div class="cat-ear cat-ear-right"></div>
+            <div class="cat-head"><div class="cat-eyes"><div class="cat-eye"><div class="cat-pupil"></div></div><div class="cat-eye cat-eye-right"><div class="cat-pupil"></div></div></div><div class="cat-nose"></div><div class="cat-mouth"></div><div class="cat-whiskers cat-whiskers-left"><span class="cat-whisker"></span><span class="cat-whisker"></span><span class="cat-whisker"></span></div><div class="cat-whiskers cat-whiskers-right"><span class="cat-whisker"></span><span class="cat-whisker"></span><span class="cat-whisker"></span></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="content"><p class="eyebrow">Кажется, здесь ничего нет</p><h1>Эта страница ушла гулять</h1><p class="lead">Адрес мог измениться или ссылка устарела. Вернитесь в конструктор и продолжайте создавать свой чехол.</p><div class="actions"><a class="btn btn-primary" href="/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>На главную</a><button class="btn btn-secondary" type="button" id="waitButton">Подождать с котом</button></div></div>
+    </section>
+    <footer class="footer"><span>© <span id="year"></span> ZestCaseSoul</span><span>Иногда лучший маршрут - назад.</span></footer><div class="toast" id="toast" role="status" aria-live="polite">Кот подождал. Страница всё ещё потеряна.</div>
+
+    <div class="corner-cat" aria-hidden="true">
+      <span class="corner-cat-shadow"></span>
+      <span class="corner-cat-ear corner-cat-ear-left"></span><span class="corner-cat-ear corner-cat-ear-right"></span>
+      <span class="corner-cat-face"><span class="corner-cat-eyes"><i class="corner-cat-eye"><b class="corner-cat-pupil"></b></i><i class="corner-cat-eye corner-cat-eye-right"><b class="corner-cat-pupil"></b></i></span><i class="corner-cat-nose"></i><i class="corner-cat-mouth"></i><span class="corner-cat-whiskers corner-cat-whiskers-left"><i></i><i></i><i></i></span><span class="corner-cat-whiskers corner-cat-whiskers-right"><i></i><i></i><i></i></span></span>
+    </div>
+  </main>
+  <script>
+    const bubble = document.getElementById("bubble");
+    const toast = document.getElementById("toast");
+    const phrases = ["Пойдём домой?", "Она точно была где-то здесь.", "Я никуда не тороплюсь.", "Ещё минутку?", "Ладно. Пойдём домой."];
+    let phraseIndex = 0;
+    let toastTimer;
+    document.getElementById("year").textContent = new Date().getFullYear();
+    document.getElementById("waitButton").addEventListener("click", () => {
+      phraseIndex = (phraseIndex + 1) % phrases.length;
+      bubble.textContent = phrases[phraseIndex];
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("show"), 2200);
+    });
+
+    const pupils = [...document.querySelectorAll(".cat-pupil")];
+    const eyes = document.querySelector(".cat-eyes");
+    let lastPointerMove = Date.now();
+    function movePupils(x, y) {
+      const rect = eyes.getBoundingClientRect();
+      const angle = Math.atan2(y - rect.top - rect.height / 2, x - rect.left - rect.width / 2);
+      const distance = Math.min(8, Math.hypot(x - rect.left - rect.width / 2, y - rect.top - rect.height / 2) / 35);
+      pupils.forEach((pupil) => { pupil.style.transform = `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px)`; });
+    }
+    if (window.matchMedia("(pointer: fine)").matches) {
+      document.addEventListener("pointermove", (event) => { lastPointerMove = Date.now(); movePupils(event.clientX, event.clientY); });
+    }
+    function curiousLook() {
+      if (Date.now() - lastPointerMove > 1600) {
+        const time = Date.now() / 1000;
+        movePupils(window.innerWidth / 2 + Math.sin(time * .75) * window.innerWidth * .28, window.innerHeight / 2 + Math.cos(time * 1.15) * 70);
+      }
+      requestAnimationFrame(curiousLook);
+    }
+    curiousLook();
+  </script>
+
+<script>
+  (() => {
+    const cats = [...document.querySelectorAll(".corner-cat")];
+    if (!cats.length || !window.matchMedia("(pointer: fine)").matches) return;
+    document.addEventListener("pointermove", (event) => {
+      cats.forEach((cat) => cat.querySelectorAll(".corner-cat-pupil").forEach((pupil) => {
+        const rect = pupil.parentElement.getBoundingClientRect();
+        const dx = event.clientX - rect.left - rect.width / 2;
+        const dy = event.clientY - rect.top - rect.height / 2;
+        const distance = Math.min(4, Math.hypot(dx, dy) / 42);
+        const angle = Math.atan2(dy, dx);
+        pupil.style.transform = `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px)`;
+      }));
+    }, { passive: true });
+  })();
+</script>
+</body>
+</html>
