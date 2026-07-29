@@ -5121,7 +5121,7 @@ function openCheckoutDialog(designs) {
         customerComment: String(formData.get("comment") || "").trim(),
         termsAccepted: formData.get("termsAccepted") === "on",
         privacyAccepted: formData.get("privacyAccepted") === "on",
-        legalVersion: "2026-07-28"
+        legalVersion: "2026-07-29"
       };
       dialog.remove();
       resolve(result);

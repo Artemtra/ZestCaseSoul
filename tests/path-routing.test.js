@@ -83,4 +83,10 @@ test("legal pages expose seller details and required documents", () => {
     assert.match(index, new RegExp(`data-legal-page="${route.replace("/", "\\/")}"`));
   }
   assert.match(index, /id="authConsent"[^>]*required/);
+  assert.match(index, /Редакция от 29 июля 2026 года/);
+  assert.match(index, /Данные оплаченного заказа считаются утверждёнными Покупателем/);
+  assert.match(index, /Время ожидания ответа не включается в срок изготовления/);
+  assert.match(index, /К заказу применяется редакция оферты, которую Покупатель принял/);
+  assert.match(client, /legalVersion: "2026-07-29"/);
+  assert.match(server, /legalDocumentVersion = "2026-07-29"/);
 });

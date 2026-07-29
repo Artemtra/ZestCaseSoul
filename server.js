@@ -30,7 +30,7 @@ const paymentTestMode = String(process.env.PAYMENT_TEST_MODE || "false").toLower
 const yookassaShopId = process.env.YOOKASSA_SHOP_ID || "";
 const yookassaSecretKey = process.env.YOOKASSA_SECRET_KEY || "";
 const defaultDeliveryAmount = Number(process.env.DEFAULT_DELIVERY_AMOUNT || 0);
-const legalDocumentVersion = "2026-07-28";
+const legalDocumentVersion = "2026-07-29";
 const allowedImageTypes = new Map([
   ["image/png", "png"],
   ["image/jpeg", "jpg"],
