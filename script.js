@@ -57,6 +57,17 @@ let adminAvatars = [];
 let avatarOptions = [];
 let executorOrders = [];
 let executorShowShipped = false;
+let supportMessages = [];
+let supportLastMessageId = 0;
+let supportPollTimer = null;
+let supportLoadRequest = null;
+let adminSupportConversations = [];
+let adminSupportMessages = [];
+let activeAdminSupportConversationId = null;
+let adminSupportLastMessageId = 0;
+let adminSupportPollTimer = null;
+let adminSupportLoadRequest = null;
+let adminSupportMessagesRequest = null;
 let authMode = "register";
 let resetPasswordToken = null;
 let pendingVerificationEmail = "";
@@ -116,6 +127,8 @@ const fallbackTemplates = [
 
 const tokenKey = "caseEditorToken";
 const sessionUserKey = "caseEditorUser";
+const supportGuestTokenKey = "zestCaseSupportGuestToken";
+const supportGuestOwnerKey = "zestCaseSupportGuestOwner";
 const modelsCacheKey = "caseEditorModelsV2";
 const templatesCacheKey = "caseEditorTemplates";
 const stickersCacheKey = "caseEditorStickers";
@@ -366,6 +379,25 @@ const publicProfileName = document.querySelector("#publicProfileName");
 const publicProfileMeta = document.querySelector("#publicProfileMeta");
 const publicProfileAvatar = document.querySelector("#publicProfileAvatar");
 const publicProfileDesigns = document.querySelector("#publicProfileDesigns");
+const cornerCatWidget = document.querySelector("#cornerCatWidget");
+const openSupportChatButton = document.querySelector("#openSupportChatButton");
+const supportChatDialog = document.querySelector("#supportChatDialog");
+const closeSupportChatButton = document.querySelector("#closeSupportChatButton");
+const supportChatEmpty = document.querySelector("#supportChatEmpty");
+const supportChatMessages = document.querySelector("#supportChatMessages");
+const supportChatForm = document.querySelector("#supportChatForm");
+const supportChatInput = document.querySelector("#supportChatInput");
+const supportChatSendButton = document.querySelector("#supportChatSendButton");
+const supportChatStatus = document.querySelector("#supportChatStatus");
+const adminSupportConversationsList = document.querySelector("#adminSupportConversations");
+const adminSupportStatus = document.querySelector("#adminSupportStatus");
+const adminSupportRefreshButton = document.querySelector("#adminSupportRefreshButton");
+const adminSupportEmpty = document.querySelector("#adminSupportEmpty");
+const adminSupportMessagesList = document.querySelector("#adminSupportMessages");
+const adminSupportForm = document.querySelector("#adminSupportForm");
+const adminSupportInput = document.querySelector("#adminSupportInput");
+const adminSupportSendButton = document.querySelector("#adminSupportSendButton");
+const adminSupportMessage = document.querySelector("#adminSupportMessage");
 const savedApiBase = localStorage.getItem("caseEditorApiBase");
 const inferredApiBase = window.location.protocol === "file:" ? "http://localhost:3000" : "";
 const configuredApiBase = window.__API_BASE__ || (window.location.protocol === "file:" ? savedApiBase || inferredApiBase : "");
@@ -965,6 +997,7 @@ function restoreCachedSession() {
   }
   if (!cachedUser) return false;
   currentUser = cachedUser;
+  bindSupportIdentityToUser(cachedUser);
   updateAuthUi();
   return true;
 }
@@ -1033,6 +1066,7 @@ function updateRangeOutputs() {
 }
 
 function showAdminEditor(editorName = "models") {
+  if (editorName !== "messages") stopAdminSupportPolling();
   adminEditorSections.forEach((section) => {
     section.classList.toggle("hidden", section.dataset.adminEditor !== editorName);
   });
@@ -1057,6 +1091,10 @@ function showAdminEditor(editorName = "models") {
   if (editorName === "orders") loadAdminOrdersPanel();
   if (editorName === "analytics") loadAdminAnalytics();
   if (editorName === "avatars") loadAdminAvatars();
+  if (editorName === "messages") {
+    loadAdminSupportConversations({ selectFirst: true });
+    startAdminSupportPolling();
+  }
 }
 
 function syncTemplateBuilderWorkspace(editorName = adminEditorSelect?.value || "") {
@@ -1124,7 +1162,10 @@ function setViewForRole(role, forceClient = false) {
   adminView.classList.toggle("hidden", !isAdmin);
   executorView?.classList.toggle("hidden", !isExecutor);
   if (isAdmin) showAdminEditor(adminEditorSelect?.value || "models");
-  if (!isAdmin) syncTemplateBuilderWorkspace("");
+  if (!isAdmin) {
+    stopAdminSupportPolling();
+    syncTemplateBuilderWorkspace("");
+  }
   if (isExecutor) loadExecutorOrders();
 }
 
@@ -1242,6 +1283,7 @@ async function authRequest(path, payload) {
     return result;
   }
 
+  bindSupportIdentityToUser(result.user);
   storeSession(result.token, result.user);
   currentUser = result.user;
   updateAuthUi();
@@ -1274,6 +1316,325 @@ async function adminRequest(path, options = {}) {
   return result;
 }
 
+function supportGuestToken() {
+  const stored = localStorage.getItem(supportGuestTokenKey);
+  if (/^[a-f0-9]{48}$/.test(stored || "")) return stored;
+  const bytes = new Uint8Array(24);
+  window.crypto.getRandomValues(bytes);
+  const token = [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+  localStorage.setItem(supportGuestTokenKey, token);
+  return token;
+}
+
+async function supportRequest(path, options = {}) {
+  const response = await fetch(apiUrl(path), {
+    ...options,
+    headers: {
+      ...authHeaders(),
+      "X-Chat-Token": supportGuestToken(),
+      ...(options.headers || {})
+    }
+  });
+  const contentType = response.headers.get("content-type") || "";
+  const result = contentType.includes("application/json")
+    ? await response.json()
+    : { raw: await response.text() };
+  if (!response.ok) throw new Error(result.error || "Не удалось открыть чат.");
+  return result;
+}
+
+function supportTimeLabel(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
+function renderSupportMessageList(messages, container, ownSender) {
+  if (!container) return;
+  const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 90;
+  container.innerHTML = "";
+  messages.forEach((message) => {
+    const item = document.createElement("article");
+    item.className = `support-message${message.senderType === ownSender ? " is-own" : ""}`;
+    const body = document.createElement("p");
+    body.textContent = message.body;
+    const time = document.createElement("time");
+    time.dateTime = message.createdAt || "";
+    time.textContent = supportTimeLabel(message.createdAt);
+    item.append(body, time);
+    container.append(item);
+  });
+  if (nearBottom || messages.length <= 2) container.scrollTop = container.scrollHeight;
+}
+
+function mergeSupportMessages(current, incoming) {
+  const messagesById = new Map(current.map((message) => [Number(message.id), message]));
+  incoming.forEach((message) => messagesById.set(Number(message.id), message));
+  return [...messagesById.values()].sort((left, right) => Number(left.id) - Number(right.id));
+}
+
+function renderCustomerSupportChat() {
+  const hasMessages = supportMessages.length > 0;
+  supportChatEmpty?.classList.toggle("hidden", hasMessages);
+  supportChatMessages?.classList.toggle("hidden", !hasMessages);
+  if (hasMessages) renderSupportMessageList(supportMessages, supportChatMessages, "customer");
+}
+
+async function loadSupportMessages({ reset = false, silent = false } = {}) {
+  if (supportLoadRequest) return supportLoadRequest;
+  const after = reset ? 0 : supportLastMessageId;
+  supportLoadRequest = (async () => {
+    try {
+      const result = await supportRequest(`/api/support/messages?after=${after}`, { cache: "no-store" });
+      if (reset) supportMessages = [];
+      supportMessages = mergeSupportMessages(supportMessages, result.messages || []);
+      supportLastMessageId = supportMessages.reduce((maximum, message) => Math.max(maximum, Number(message.id) || 0), 0);
+      renderCustomerSupportChat();
+      if (!silent && supportChatStatus) supportChatStatus.textContent = "";
+      return supportMessages;
+    } catch (error) {
+      if (!silent && supportChatStatus) supportChatStatus.textContent = error.message;
+      return supportMessages;
+    }
+  })().finally(() => {
+    supportLoadRequest = null;
+  });
+  return supportLoadRequest;
+}
+
+function startSupportPolling() {
+  stopSupportPolling();
+  supportPollTimer = window.setInterval(() => {
+    if (supportChatDialog?.open && document.visibilityState === "visible") {
+      loadSupportMessages({ silent: true });
+    }
+  }, 15_000);
+}
+
+function stopSupportPolling() {
+  if (!supportPollTimer) return;
+  window.clearInterval(supportPollTimer);
+  supportPollTimer = null;
+}
+
+async function openSupportChat() {
+  cornerCatWidget?.classList.add("is-chat-open");
+  if (typeof supportChatDialog?.showModal === "function") supportChatDialog.showModal();
+  else supportChatDialog?.setAttribute("open", "");
+  if (supportChatStatus) supportChatStatus.textContent = "Загружаю сообщения...";
+  await loadSupportMessages({ reset: true });
+  startSupportPolling();
+  supportChatInput?.focus();
+}
+
+function closeSupportChat() {
+  stopSupportPolling();
+  cornerCatWidget?.classList.remove("is-chat-open");
+  if (supportChatDialog?.open && typeof supportChatDialog.close === "function") supportChatDialog.close();
+  else supportChatDialog?.removeAttribute("open");
+}
+
+function resetSupportChatIdentity() {
+  stopSupportPolling();
+  localStorage.removeItem(supportGuestTokenKey);
+  localStorage.removeItem(supportGuestOwnerKey);
+  supportMessages = [];
+  supportLastMessageId = 0;
+  renderCustomerSupportChat();
+}
+
+function bindSupportIdentityToUser(user) {
+  const userId = String(user?.id || "");
+  if (!userId) return;
+  const currentOwner = localStorage.getItem(supportGuestOwnerKey);
+  if (currentOwner && currentOwner !== userId) resetSupportChatIdentity();
+  localStorage.setItem(supportGuestOwnerKey, userId);
+}
+
+async function sendCustomerSupportMessage() {
+  const body = String(supportChatInput?.value || "").trim();
+  if (!body) return;
+  supportChatSendButton.disabled = true;
+  if (supportChatStatus) supportChatStatus.textContent = "Отправляю...";
+  try {
+    const result = await supportRequest("/api/support/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: body })
+    });
+    supportMessages = mergeSupportMessages(supportMessages, [result.message]);
+    supportLastMessageId = Math.max(supportLastMessageId, Number(result.message?.id) || 0);
+    supportChatInput.value = "";
+    renderCustomerSupportChat();
+    if (supportChatStatus) supportChatStatus.textContent = "Сообщение отправлено.";
+  } catch (error) {
+    if (supportChatStatus) supportChatStatus.textContent = error.message;
+  } finally {
+    supportChatSendButton.disabled = false;
+    supportChatInput?.focus();
+  }
+}
+
+function renderAdminSupportConversations() {
+  if (!adminSupportConversationsList) return;
+  adminSupportConversationsList.innerHTML = "";
+  const unreadTotal = adminSupportConversations.reduce((sum, conversation) => sum + Number(conversation.adminUnreadCount || 0), 0);
+  if (adminSupportStatus) {
+    adminSupportStatus.textContent = `${adminSupportConversations.length} ${adminSupportConversations.length === 1 ? "чат" : "чатов"}${unreadTotal ? ` · ${unreadTotal} новых` : ""}`;
+  }
+  if (!adminSupportConversations.length) {
+    const empty = document.createElement("p");
+    empty.className = "admin-list-empty";
+    empty.textContent = "Новых сообщений пока нет.";
+    adminSupportConversationsList.append(empty);
+    return;
+  }
+  adminSupportConversations.forEach((conversation) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `admin-support-conversation${Number(conversation.id) === Number(activeAdminSupportConversationId) ? " is-active" : ""}`;
+    const heading = document.createElement("span");
+    const name = document.createElement("strong");
+    name.textContent = conversation.customerName || "Гость сайта";
+    heading.append(name);
+    if (Number(conversation.adminUnreadCount || 0) > 0) {
+      const unread = document.createElement("span");
+      unread.className = "admin-support-unread";
+      unread.textContent = String(conversation.adminUnreadCount);
+      heading.append(unread);
+    }
+    const preview = document.createElement("small");
+    preview.textContent = conversation.lastMessage || "Новый чат";
+    const time = document.createElement("small");
+    time.textContent = supportTimeLabel(conversation.lastMessageAt || conversation.createdAt);
+    button.append(heading, preview, time);
+    button.addEventListener("click", async () => {
+      activeAdminSupportConversationId = Number(conversation.id);
+      adminSupportMessages = [];
+      adminSupportLastMessageId = 0;
+      renderAdminSupportConversations();
+      await loadAdminSupportMessages({ reset: true });
+      loadAdminSupportConversations({ silent: true });
+    });
+    adminSupportConversationsList.append(button);
+  });
+}
+
+function renderAdminSupportThread() {
+  const hasConversation = Boolean(activeAdminSupportConversationId);
+  adminSupportEmpty?.classList.toggle("hidden", hasConversation);
+  adminSupportMessagesList?.classList.toggle("hidden", !hasConversation);
+  adminSupportForm?.classList.toggle("hidden", !hasConversation);
+  if (hasConversation) renderSupportMessageList(adminSupportMessages, adminSupportMessagesList, "admin");
+}
+
+async function loadAdminSupportMessages({ reset = false, silent = false } = {}) {
+  if (!activeAdminSupportConversationId || adminSupportMessagesRequest) return adminSupportMessagesRequest;
+  const conversationId = activeAdminSupportConversationId;
+  const after = reset ? 0 : adminSupportLastMessageId;
+  adminSupportMessagesRequest = (async () => {
+    try {
+      const result = await adminRequest(`/api/admin/support/conversations/${conversationId}/messages?after=${after}`, { cache: "no-store" });
+      if (Number(activeAdminSupportConversationId) !== Number(conversationId)) return;
+      if (reset) adminSupportMessages = [];
+      adminSupportMessages = mergeSupportMessages(adminSupportMessages, result.messages || []);
+      adminSupportLastMessageId = adminSupportMessages.reduce((maximum, message) => Math.max(maximum, Number(message.id) || 0), 0);
+      const activeConversation = adminSupportConversations.find((conversation) => Number(conversation.id) === Number(conversationId));
+      if (activeConversation) activeConversation.adminUnreadCount = 0;
+      renderAdminSupportConversations();
+      renderAdminSupportThread();
+      if (!silent && adminSupportMessage) adminSupportMessage.textContent = "";
+    } catch (error) {
+      if (!silent && adminSupportMessage) adminSupportMessage.textContent = error.message;
+    }
+  })().finally(() => {
+    adminSupportMessagesRequest = null;
+  });
+  return adminSupportMessagesRequest;
+}
+
+async function loadAdminSupportConversations({ selectFirst = false, silent = false } = {}) {
+  if (adminSupportLoadRequest) return adminSupportLoadRequest;
+  adminSupportLoadRequest = (async () => {
+    try {
+      const result = await adminRequest("/api/admin/support/conversations", { cache: "no-store" });
+      adminSupportConversations = result.conversations || [];
+      if (
+        activeAdminSupportConversationId &&
+        !adminSupportConversations.some((conversation) => Number(conversation.id) === Number(activeAdminSupportConversationId))
+      ) {
+        activeAdminSupportConversationId = null;
+        adminSupportMessages = [];
+        adminSupportLastMessageId = 0;
+      }
+      if (!activeAdminSupportConversationId && selectFirst && adminSupportConversations.length) {
+        activeAdminSupportConversationId = Number(adminSupportConversations[0].id);
+        adminSupportMessages = [];
+        adminSupportLastMessageId = 0;
+      }
+      renderAdminSupportConversations();
+      renderAdminSupportThread();
+      if (activeAdminSupportConversationId) await loadAdminSupportMessages({ reset: adminSupportLastMessageId === 0, silent: true });
+      if (!silent && adminSupportMessage) adminSupportMessage.textContent = "";
+    } catch (error) {
+      if (!silent && adminSupportMessage) adminSupportMessage.textContent = error.message;
+    }
+  })().finally(() => {
+    adminSupportLoadRequest = null;
+  });
+  return adminSupportLoadRequest;
+}
+
+function startAdminSupportPolling() {
+  stopAdminSupportPolling();
+  adminSupportPollTimer = window.setInterval(() => {
+    if (
+      currentUser?.role === "admin" &&
+      !adminView.classList.contains("hidden") &&
+      adminEditorSelect?.value === "messages" &&
+      document.visibilityState === "visible"
+    ) {
+      loadAdminSupportConversations({ silent: true });
+    }
+  }, 12_000);
+}
+
+function stopAdminSupportPolling() {
+  if (!adminSupportPollTimer) return;
+  window.clearInterval(adminSupportPollTimer);
+  adminSupportPollTimer = null;
+}
+
+async function sendAdminSupportMessage() {
+  const body = String(adminSupportInput?.value || "").trim();
+  if (!body || !activeAdminSupportConversationId) return;
+  adminSupportSendButton.disabled = true;
+  if (adminSupportMessage) adminSupportMessage.textContent = "Отправляю...";
+  try {
+    const result = await adminRequest(`/api/admin/support/conversations/${activeAdminSupportConversationId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: body })
+    });
+    adminSupportMessages = mergeSupportMessages(adminSupportMessages, [result.message]);
+    adminSupportLastMessageId = Math.max(adminSupportLastMessageId, Number(result.message?.id) || 0);
+    adminSupportInput.value = "";
+    renderAdminSupportThread();
+    await loadAdminSupportConversations({ silent: true });
+    if (adminSupportMessage) adminSupportMessage.textContent = "Ответ отправлен.";
+  } catch (error) {
+    if (adminSupportMessage) adminSupportMessage.textContent = error.message;
+  } finally {
+    adminSupportSendButton.disabled = false;
+    adminSupportInput?.focus();
+  }
+}
+
 async function checkSession() {
   const token = localStorage.getItem(tokenKey);
   if (!token) {
@@ -1292,6 +1653,7 @@ async function checkSession() {
     if (!response.ok) throw new Error("session expired");
     const result = await response.json();
     currentUser = result.user;
+    bindSupportIdentityToUser(result.user);
     storeSession(token, result.user);
   } catch {
     clearStoredSession();
@@ -6022,6 +6384,7 @@ profileDialog?.addEventListener("close", syncRouteAfterProfileClose);
 profileLogoutButton?.addEventListener("click", () => {
   clearPrivateClientState();
   clearStoredSession();
+  resetSupportChatIdentity();
   currentUser = null;
   updateAuthUi();
   profileDialog.close();
@@ -6105,6 +6468,21 @@ adminEditorSelect?.addEventListener("change", () => {
 adminEditorNavButtons.forEach((button) => button.addEventListener("click", () => {
   showAdminEditor(button.dataset.adminTarget);
 }));
+openSupportChatButton?.addEventListener("click", openSupportChat);
+closeSupportChatButton?.addEventListener("click", closeSupportChat);
+supportChatDialog?.addEventListener("close", () => {
+  stopSupportPolling();
+  cornerCatWidget?.classList.remove("is-chat-open");
+});
+supportChatForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  sendCustomerSupportMessage();
+});
+adminSupportRefreshButton?.addEventListener("click", () => loadAdminSupportConversations({ selectFirst: true }));
+adminSupportForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  sendAdminSupportMessage();
+});
 analyticsPeriodSelect?.addEventListener("change", loadAdminAnalytics);
 adminAvatarForm?.addEventListener("submit", submitAdminAvatar);
 adminAvatarFile?.addEventListener("change", () => loadAvatarEditorFile(adminAvatarFile.files?.[0]));
@@ -6381,6 +6759,7 @@ adminModelForm.addEventListener("change", (event) => {
 logoutButton.addEventListener("click", () => {
   clearPrivateClientState();
   clearStoredSession();
+  resetSupportChatIdentity();
   currentUser = null;
   updateAuthUi();
 });

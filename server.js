@@ -40,6 +40,8 @@ const allowedImageTypes = new Map([
 const allowedImageExtensions = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 const maxDesignImages = 10;
 const maxDesignTexts = 7;
+const maxSupportMessageLength = 2000;
+const supportPostCooldowns = new Map();
 const corsOrigins = new Set([
   appUrl,
   `http://localhost:${port}`,
@@ -111,7 +113,7 @@ app.use((req, res, next) => {
     res.setHeader("Vary", "Origin");
   }
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Chat-Token");
   next();
 });
 app.options("*", (req, res) => {
@@ -853,6 +855,298 @@ function requireExecutor(req, res, next) {
   }
   next();
 }
+
+function supportGuestTokenHash(req) {
+  const token = String(req.header("x-chat-token") || "").trim();
+  if (!/^[a-f0-9]{48}$/.test(token)) return null;
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+async function optionalSupportUser(req) {
+  const header = req.header("authorization") || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  const payload = verifyToken(token);
+  if (!payload) return null;
+  const [rows] = await pool.query(
+    "SELECT id, name, email, role FROM users WHERE id = ? LIMIT 1",
+    [payload.userId]
+  );
+  return rows[0] || null;
+}
+
+async function findSupportConversation(req, { create = false } = {}) {
+  const guestTokenHash = supportGuestTokenHash(req);
+  if (!guestTokenHash) return { invalidToken: true, conversation: null, user: null };
+  const user = await optionalSupportUser(req);
+  const [rows] = await pool.query(
+    "SELECT id, user_id AS userId, status, customer_unread_count AS customerUnreadCount FROM support_conversations WHERE guest_token_hash = ? LIMIT 1",
+    [guestTokenHash]
+  );
+  let conversation = rows[0] || null;
+  if (!conversation && create) {
+    try {
+      const [result] = await pool.query(
+        "INSERT INTO support_conversations (guest_token_hash, user_id) VALUES (?, ?)",
+        [guestTokenHash, user?.id || null]
+      );
+      conversation = { id: result.insertId, userId: user?.id || null, status: "open" };
+    } catch (error) {
+      if (error.code !== "ER_DUP_ENTRY") throw error;
+      const [existingRows] = await pool.query(
+        "SELECT id, user_id AS userId, status, customer_unread_count AS customerUnreadCount FROM support_conversations WHERE guest_token_hash = ? LIMIT 1",
+        [guestTokenHash]
+      );
+      conversation = existingRows[0] || null;
+    }
+  }
+  if (conversation && user && !conversation.userId) {
+    await pool.query(
+      "UPDATE support_conversations SET user_id = ? WHERE id = ? AND user_id IS NULL",
+      [user.id, conversation.id]
+    );
+    conversation.userId = user.id;
+  }
+  return { invalidToken: false, conversation, user };
+}
+
+function supportMessageBody(value) {
+  const body = String(value || "").trim();
+  if (!body || body.length > maxSupportMessageLength) return null;
+  return body;
+}
+
+function supportMessageRow(row) {
+  return {
+    id: Number(row.id),
+    senderType: row.senderType,
+    body: row.body,
+    createdAt: row.createdAt
+  };
+}
+
+async function listSupportMessages(conversationId, afterId = 0) {
+  if (afterId > 0) {
+    const [rows] = await pool.query(
+      `SELECT id, sender_type AS senderType, body, created_at AS createdAt
+       FROM support_messages
+       WHERE conversation_id = ? AND id > ?
+       ORDER BY id
+       LIMIT 100`,
+      [conversationId, afterId]
+    );
+    return rows.map(supportMessageRow);
+  }
+  const [rows] = await pool.query(
+    `SELECT id, sender_type AS senderType, body, created_at AS createdAt
+     FROM support_messages
+     WHERE conversation_id = ?
+     ORDER BY id DESC
+     LIMIT 100`,
+    [conversationId]
+  );
+  return rows.reverse().map(supportMessageRow);
+}
+
+function supportPostAllowed(key) {
+  const now = Date.now();
+  const previous = Number(supportPostCooldowns.get(key) || 0);
+  if (now - previous < 1500) return false;
+  supportPostCooldowns.set(key, now);
+  if (supportPostCooldowns.size > 5000) {
+    const staleBefore = now - 60 * 60 * 1000;
+    for (const [entryKey, time] of supportPostCooldowns) {
+      if (time < staleBefore) supportPostCooldowns.delete(entryKey);
+    }
+  }
+  return true;
+}
+
+app.get("/api/support/messages", async (req, res, next) => {
+  try {
+    res.setHeader("Cache-Control", "private, no-store");
+    const identity = await findSupportConversation(req);
+    if (identity.invalidToken) {
+      res.status(400).json({ error: "Не удалось открыть чат. Обновите страницу." });
+      return;
+    }
+    if (!identity.conversation) {
+      res.json({ conversationId: null, messages: [] });
+      return;
+    }
+    const afterId = Math.max(0, Number(req.query.after || 0) || 0);
+    const messages = await listSupportMessages(identity.conversation.id, afterId);
+    if (Number(identity.conversation.customerUnreadCount || 0) > 0) {
+      await pool.query(
+        "UPDATE support_conversations SET customer_unread_count = 0 WHERE id = ? AND customer_unread_count > 0",
+        [identity.conversation.id]
+      );
+    }
+    res.json({ conversationId: Number(identity.conversation.id), messages });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/support/messages", async (req, res, next) => {
+  let connection = null;
+  try {
+    const body = supportMessageBody(req.body.message);
+    if (!body) {
+      res.status(400).json({ error: `Введите сообщение длиной до ${maxSupportMessageLength} символов.` });
+      return;
+    }
+    const identity = await findSupportConversation(req, { create: true });
+    if (identity.invalidToken || !identity.conversation) {
+      res.status(400).json({ error: "Не удалось открыть чат. Обновите страницу." });
+      return;
+    }
+    const cooldownKey = `${identity.conversation.id}:${req.ip}`;
+    if (!supportPostAllowed(cooldownKey)) {
+      res.status(429).json({ error: "Сообщения отправляются слишком быстро. Подождите пару секунд." });
+      return;
+    }
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    await connection.query(
+      "SELECT id FROM support_conversations WHERE id = ? FOR UPDATE",
+      [identity.conversation.id]
+    );
+    const [result] = await connection.query(
+      "INSERT INTO support_messages (conversation_id, sender_type, sender_user_id, body) VALUES (?, 'customer', ?, ?)",
+      [identity.conversation.id, identity.user?.id || null, body]
+    );
+    await connection.query(
+      `UPDATE support_conversations
+       SET status = 'open', admin_unread_count = admin_unread_count + 1, last_message_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [identity.conversation.id]
+    );
+    const [rows] = await connection.query(
+      "SELECT id, sender_type AS senderType, body, created_at AS createdAt FROM support_messages WHERE id = ?",
+      [result.insertId]
+    );
+    await connection.commit();
+    res.status(201).json({
+      conversationId: Number(identity.conversation.id),
+      message: supportMessageRow(rows[0])
+    });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    next(error);
+  } finally {
+    connection?.release();
+  }
+});
+
+app.get("/api/admin/support/conversations", requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    res.setHeader("Cache-Control", "private, no-store");
+    const [rows] = await pool.query(
+      `SELECT
+         c.id,
+         COALESCE(u.name, 'Гость сайта') AS customerName,
+         u.email AS customerEmail,
+         c.status,
+         c.admin_unread_count AS adminUnreadCount,
+         c.last_message_at AS lastMessageAt,
+         c.created_at AS createdAt,
+         last_message.body AS lastMessage
+       FROM support_conversations c
+       LEFT JOIN users u ON u.id = c.user_id
+       LEFT JOIN support_messages last_message
+         ON last_message.id = (
+           SELECT MAX(message_lookup.id)
+           FROM support_messages message_lookup
+           WHERE message_lookup.conversation_id = c.id
+         )
+       ORDER BY COALESCE(c.last_message_at, c.created_at) DESC, c.id DESC
+       LIMIT 100`
+    );
+    res.json({
+      conversations: rows.map((row) => ({
+        ...row,
+        id: Number(row.id),
+        adminUnreadCount: Number(row.adminUnreadCount || 0)
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/admin/support/conversations/:id/messages", requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    res.setHeader("Cache-Control", "private, no-store");
+    const conversationId = Number(req.params.id);
+    if (!conversationId) {
+      res.status(400).json({ error: "Чат не найден." });
+      return;
+    }
+    const [conversations] = await pool.query(
+      "SELECT id, admin_unread_count AS adminUnreadCount FROM support_conversations WHERE id = ? LIMIT 1",
+      [conversationId]
+    );
+    if (!conversations.length) {
+      res.status(404).json({ error: "Чат не найден." });
+      return;
+    }
+    const afterId = Math.max(0, Number(req.query.after || 0) || 0);
+    const messages = await listSupportMessages(conversationId, afterId);
+    if (Number(conversations[0].adminUnreadCount || 0) > 0) {
+      await pool.query(
+        "UPDATE support_conversations SET admin_unread_count = 0 WHERE id = ? AND admin_unread_count > 0",
+        [conversationId]
+      );
+    }
+    res.json({ conversationId, messages });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/admin/support/conversations/:id/messages", requireAuth, requireAdmin, async (req, res, next) => {
+  let connection = null;
+  try {
+    const conversationId = Number(req.params.id);
+    const body = supportMessageBody(req.body.message);
+    if (!conversationId || !body) {
+      res.status(400).json({ error: `Выберите чат и введите ответ длиной до ${maxSupportMessageLength} символов.` });
+      return;
+    }
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const [conversations] = await connection.query(
+      "SELECT id FROM support_conversations WHERE id = ? FOR UPDATE",
+      [conversationId]
+    );
+    if (!conversations.length) {
+      await connection.rollback();
+      res.status(404).json({ error: "Чат не найден." });
+      return;
+    }
+    const [result] = await connection.query(
+      "INSERT INTO support_messages (conversation_id, sender_type, sender_user_id, body) VALUES (?, 'admin', ?, ?)",
+      [conversationId, req.user.id, body]
+    );
+    await connection.query(
+      `UPDATE support_conversations
+       SET customer_unread_count = customer_unread_count + 1, last_message_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [conversationId]
+    );
+    const [rows] = await connection.query(
+      "SELECT id, sender_type AS senderType, body, created_at AS createdAt FROM support_messages WHERE id = ?",
+      [result.insertId]
+    );
+    await connection.commit();
+    res.status(201).json({ conversationId, message: supportMessageRow(rows[0]) });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    next(error);
+  } finally {
+    connection?.release();
+  }
+});
 
 function readCategoryPayload(body) {
   const name = String(body.name || "").trim();
