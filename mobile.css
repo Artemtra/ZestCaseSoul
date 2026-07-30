@@ -981,6 +981,22 @@ button {
     touch-action: pan-x pan-y;
   }
 
+  .profile-design-card.is-selected::after {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    padding: 5px 9px;
+    color: #fff;
+    border-radius: 999px;
+    content: "Выбран";
+    background: var(--ink);
+    box-shadow: 0 4px 12px rgba(16, 39, 45, 0.2);
+    font-size: 0.7rem;
+    font-weight: 900;
+    line-height: 1;
+    pointer-events: none;
+  }
+
   .profile-preview-grid {
     gap: 20px;
   }

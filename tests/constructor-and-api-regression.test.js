@@ -182,6 +182,26 @@ test("profile provides an authenticated order list with status filters", () => {
   assert.match(serverSource, /app\.get\("\/api\/profile\/orders", requireAuth/);
 });
 
+test("profile visibility is a bare eye control beside the profile label", () => {
+  assert.match(htmlSource, /class="profile-title-row"[\s\S]{0,180}<p class="eyebrow">Профиль<\/p>[\s\S]{0,420}id="profileVisibilityButton"[\s\S]{0,300}<svg class="profile-visibility-icon"/);
+  assert.doesNotMatch(htmlSource, /class="ghost profile-visibility-button"/);
+  assert.match(stylesSource, /button\.profile-visibility-button \{[\s\S]*?background: transparent;[\s\S]*?box-shadow: none;/);
+  assert.match(stylesSource, /\.profile-visibility-button\.is-private::after/);
+  assert.match(scriptSource, /setAttribute\("aria-label", isPublic \? "Скрыть профиль" : "Открыть профиль"\)/);
+});
+
+test("mobile saved designs select only after a completed tap without triggering payment", () => {
+  const start = scriptSource.indexOf("function renderProfileDesigns()");
+  const end = scriptSource.indexOf("function showProfileDesign", start);
+  const body = scriptSource.slice(start, end);
+  assert.match(body, /if \(event\.pointerType !== "mouse"\)/);
+  assert.match(body, /card\.addEventListener\("pointerup"/);
+  assert.match(body, /const shouldSelect = !touchTap\.moved/);
+  assert.match(body, /window\.setTimeout\(\(\) => \{[\s\S]*selectOnlyProfileDesign\(design\);[\s\S]*\}, 0\)/);
+  assert.doesNotMatch(body, /if \(event\.pointerType !== "mouse"\)[\s\S]{0,260}selectProfileDesignRange\(index, index\)/);
+  assert.match(mobileCssSource, /\.profile-design-card\.is-selected::after/);
+});
+
 test("constructor, templates, and API enforce a ten-image limit", () => {
   assert.match(scriptSource, /const maxImageLayers = 10/);
   assert.match(scriptSource, /function canAddImageLayers/);

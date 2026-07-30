@@ -88,6 +88,7 @@ const designDetailCache = new Map();
 let activeProfileDesignId = null;
 let selectedProfileDesignIds = new Set();
 let profileSelectionDrag = { active: false, startIndex: -1, currentIndex: -1 };
+const profileTapMovementTolerance = 12;
 let imageState = { x: 0, y: 0, scale: 1, rotation: 0 };
 let drag = { active: false, startX: 0, startY: 0, imageX: 0, imageY: 0 };
 const canvasPointers = new Map();
@@ -380,6 +381,7 @@ const publicProfileMeta = document.querySelector("#publicProfileMeta");
 const publicProfileAvatar = document.querySelector("#publicProfileAvatar");
 const publicProfileDesigns = document.querySelector("#publicProfileDesigns");
 const cornerCatWidget = document.querySelector("#cornerCatWidget");
+const cornerCatCallout = document.querySelector("#cornerCatCallout");
 const openSupportChatButton = document.querySelector("#openSupportChatButton");
 const supportChatDialog = document.querySelector("#supportChatDialog");
 const closeSupportChatButton = document.querySelector("#closeSupportChatButton");
@@ -1424,6 +1426,8 @@ function stopSupportPolling() {
 
 async function openSupportChat() {
   cornerCatWidget?.classList.add("is-chat-open");
+  if (cornerCatCallout) cornerCatCallout.hidden = true;
+  openSupportChatButton?.removeAttribute("aria-describedby");
   if (typeof supportChatDialog?.showModal === "function") supportChatDialog.showModal();
   else supportChatDialog?.setAttribute("open", "");
   if (supportChatStatus) supportChatStatus.textContent = "Загружаю сообщения...";
@@ -5371,6 +5375,7 @@ function renderProfileDesigns() {
     card.dataset.designId = String(design.id);
     card.dataset.designIndex = String(index);
     card.tabIndex = 0;
+    let touchTap = null;
     card.innerHTML = `
       <img src="${displayImageUrl(design.previewWithCameraUrl)}" alt="" loading="lazy" decoding="async">
       <strong>${design.title}</strong>
@@ -5379,9 +5384,38 @@ function renderProfileDesigns() {
     `;
     card.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) return;
+      if (event.pointerType !== "mouse") {
+        touchTap = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          moved: false
+        };
+        return;
+      }
       event.preventDefault();
       profileSelectionDrag = { active: true, startIndex: index, currentIndex: index };
       selectProfileDesignRange(index, index);
+    });
+    card.addEventListener("pointermove", (event) => {
+      if (!touchTap || event.pointerId !== touchTap.pointerId) return;
+      const distance = Math.hypot(event.clientX - touchTap.startX, event.clientY - touchTap.startY);
+      if (distance > profileTapMovementTolerance) touchTap.moved = true;
+    });
+    card.addEventListener("pointerup", (event) => {
+      if (!touchTap || event.pointerId !== touchTap.pointerId) return;
+      const shouldSelect = !touchTap.moved;
+      touchTap = null;
+      if (!shouldSelect) return;
+      event.preventDefault();
+      window.setTimeout(() => {
+        if (card.isConnected) selectOnlyProfileDesign(design);
+      }, 0);
+    });
+    ["pointercancel", "lostpointercapture"].forEach((eventName) => {
+      card.addEventListener(eventName, () => {
+        touchTap = null;
+      });
     });
     card.addEventListener("pointerenter", () => {
       if (!profileSelectionDrag.active) return;
@@ -5747,6 +5781,7 @@ function updateProfileVisibilityButton() {
   const isPublic = Boolean(currentUser.profilePublic);
   profileVisibilityButton.classList.toggle("is-private", !isPublic);
   profileVisibilityButton.setAttribute("aria-pressed", String(isPublic));
+  profileVisibilityButton.setAttribute("aria-label", isPublic ? "Скрыть профиль" : "Открыть профиль");
   profileVisibilityButton.title = isPublic ? "Профиль открыт. Нажмите, чтобы скрыть." : "Профиль скрыт. Нажмите, чтобы открыть.";
 }
 

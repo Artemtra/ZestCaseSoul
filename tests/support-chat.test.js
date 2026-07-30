@@ -20,6 +20,9 @@ test("the cat opens an accessible cartoon support chat with clear empty-state co
   assert.match(styles, /\.corner-cat-callout::after/);
   assert.match(styles, /font-family: "Manrope", sans-serif;/);
   assert.match(styles, /font-weight: 800;/);
+  assert.match(client, /if \(cornerCatCallout\) cornerCatCallout\.hidden = true;/);
+  assert.match(client, /openSupportChatButton\?\.removeAttribute\("aria-describedby"\)/);
+  assert.match(styles, /\.corner-cat-callout\[hidden\]/);
   assert.match(styles, /@keyframes corner-cat-callout-arrive/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });

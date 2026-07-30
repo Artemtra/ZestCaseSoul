@@ -52,8 +52,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Marck+Script&family=Russo+One&family=Unbounded:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/styles.css?v=20260730-cat-callout-v22">
-    <link rel="stylesheet" href="/mobile.css?v=20260730-support-chat-v21">
+    <link rel="stylesheet" href="/styles.css?v=20260730-profile-eye-v24">
+    <link rel="stylesheet" href="/mobile.css?v=20260730-mobile-tap-v23">
   </head>
   <body>
     <main class="shell" id="top">
@@ -1220,7 +1220,15 @@
     <dialog class="profile-dialog" id="profileDialog">
       <section class="profile-card">
         <button class="dialog-close" id="closeProfileButton" type="button" aria-label="Закрыть">×</button>
-        <p class="eyebrow">Профиль</p>
+        <div class="profile-title-row">
+          <p class="eyebrow">Профиль</p>
+          <button class="profile-visibility-button" id="profileVisibilityButton" type="button" aria-label="Изменить видимость профиля" aria-pressed="false" title="Скрыть или открыть профиль">
+            <svg class="profile-visibility-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
+              <circle cx="12" cy="12" r="2.8"></circle>
+            </svg>
+          </button>
+        </div>
         <h2 id="profileName">Мой профиль</h2>
         <p class="auth-copy" id="profileMeta"></p>
         <div class="profile-avatar-panel">
@@ -1231,7 +1239,6 @@
           <button class="ghost" id="profileLogoutButton" type="button">Выйти</button>
           <button class="ghost" id="profileOrdersToggleButton" type="button">Мои заказы</button>
           <button class="ghost" id="openPasswordPanelButton" type="button">Сменить пароль</button>
-          <button class="ghost profile-visibility-button" id="profileVisibilityButton" type="button" title="Скрыть или открыть профиль">👁</button>
         </div>
         <section class="profile-orders-panel hidden" id="profileOrdersPanel" aria-live="polite">
           <div class="section-heading">
@@ -1347,7 +1354,7 @@
         <span class="corner-cat-face"><span class="corner-cat-eyes"><i class="corner-cat-eye"><b class="corner-cat-pupil"></b></i><i class="corner-cat-eye corner-cat-eye-right"><b class="corner-cat-pupil"></b></i></span><i class="corner-cat-nose"></i><i class="corner-cat-mouth"></i><span class="corner-cat-whiskers corner-cat-whiskers-left"><i></i><i></i><i></i></span><span class="corner-cat-whiskers corner-cat-whiskers-right"><i></i><i></i><i></i></span></span>
       </button>
     </div>
-    <script src="/script.js?v=20260730-support-chat-v21"></script>
+    <script src="/script.js?v=20260730-profile-eye-v24"></script>
     <script src="/mobile-ui.js?v=20260730-support-chat-v21"></script>
 <script>
   (() => {

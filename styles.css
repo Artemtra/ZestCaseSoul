@@ -1857,18 +1857,62 @@ img {
   display: inline;
 }
 
-.profile-visibility-button {
+.profile-title-row {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-title-row .eyebrow {
+  margin: 0;
+}
+
+button.profile-visibility-button {
   position: relative;
-  min-width: 44px;
+  display: inline-grid;
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  place-items: center;
+  color: var(--ink);
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+}
+
+button.profile-visibility-button:hover {
+  color: var(--accent-dark);
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+button.profile-visibility-button:focus-visible {
+  outline: 3px solid rgba(240, 107, 52, 0.3);
+  outline-offset: 1px;
+  background: transparent;
+}
+
+.profile-visibility-icon {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .profile-visibility-button.is-private::after {
   content: "";
   position: absolute;
-  left: 11px;
-  right: 11px;
+  left: 7px;
+  right: 7px;
   top: 50%;
-  height: 2px;
+  height: 2.5px;
   border-radius: 999px;
   background: currentColor;
   transform: rotate(-34deg);
@@ -4144,6 +4188,10 @@ html {
   background: #fff;
   clip-path: polygon(0 0, 100% 100%, 0 72%);
   transform: rotate(13deg);
+}
+
+.corner-cat-callout[hidden] {
+  display: none;
 }
 
 .corner-cat-widget.is-chat-open .corner-cat-callout {
