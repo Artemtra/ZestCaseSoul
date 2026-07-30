@@ -11,13 +11,15 @@ const [html, client, server, styles, migration] = await Promise.all([
 ]);
 
 test("the cat opens an accessible cartoon support chat with clear empty-state copy", () => {
-  assert.match(html, /id="cornerCatCallout">Нажми на меня</);
+  assert.match(html, /id="cornerCatCallout">Нажми на меня!<\/span>/);
   assert.match(html, /id="openSupportChatButton"[^>]*aria-label="Открыть чат с администратором"/);
   assert.match(html, /id="supportChatDialog"[^>]*aria-labelledby="supportChatTitle"/);
   assert.match(html, /<h2>Чат с администратором<\/h2>/);
   assert.match(html, /<p>Задайте интересующий вас вопрос<\/p>/);
   assert.match(html, /id="supportChatInput" maxlength="2000"/);
   assert.match(styles, /\.corner-cat-callout::after/);
+  assert.match(styles, /font-family: "Manrope", sans-serif;/);
+  assert.match(styles, /font-weight: 800;/);
   assert.match(styles, /@keyframes corner-cat-callout-arrive/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
