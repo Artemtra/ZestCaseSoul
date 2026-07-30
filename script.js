@@ -1465,6 +1465,7 @@ function stopSupportPolling() {
 
 async function openSupportChat() {
   cornerCatWidget?.classList.add("is-chat-open");
+  openSupportChatButton?.classList.remove("is-returned-focus");
   if (cornerCatCallout) cornerCatCallout.hidden = true;
   openSupportChatButton?.removeAttribute("aria-describedby");
   if (typeof supportChatDialog?.showModal === "function") supportChatDialog.showModal();
@@ -6543,10 +6544,14 @@ adminEditorNavButtons.forEach((button) => button.addEventListener("click", () =>
   showAdminEditor(button.dataset.adminTarget);
 }));
 openSupportChatButton?.addEventListener("click", openSupportChat);
+openSupportChatButton?.addEventListener("blur", () => {
+  openSupportChatButton.classList.remove("is-returned-focus");
+});
 closeSupportChatButton?.addEventListener("click", closeSupportChat);
 supportChatDialog?.addEventListener("close", () => {
   stopSupportPolling();
   cornerCatWidget?.classList.remove("is-chat-open");
+  openSupportChatButton?.classList.add("is-returned-focus");
 });
 supportChatForm?.addEventListener("submit", (event) => {
   event.preventDefault();

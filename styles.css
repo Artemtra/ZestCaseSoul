@@ -4153,6 +4153,10 @@ html {
   box-shadow: 0 0 0 4px rgba(237, 22, 49, 0.25);
 }
 
+.corner-cat.is-returned-focus:focus-visible {
+  box-shadow: none;
+}
+
 .corner-cat-callout {
   position: absolute;
   right: 51px;
