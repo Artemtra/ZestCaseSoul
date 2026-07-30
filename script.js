@@ -479,8 +479,10 @@ const publicRouteDefinitions = Object.freeze({
   "/orders": { title: "Мои заказы | ZestCaseSoul", description: "Заказы и их статусы в ZestCaseSoul.", action: "orders" }
 });
 const profileModalRoutePaths = new Set(["/profile", "/designs", "/orders"]);
+const authModalRoutePaths = new Set(["/login", "/register"]);
 const legalRoutePaths = new Set(["/contacts", "/delivery", "/returns", "/payment", "/offer", "/privacy"]);
 let suppressProfileCloseRouteSync = false;
+let suppressAuthCloseRouteSync = false;
 
 function isAbsoluteUrl(value) {
   return /^(?:https?:)?\/\//i.test(value);
@@ -530,10 +532,28 @@ function validProfileReturnUrl(value) {
   }
 }
 
+function validAuthReturnUrl(value) {
+  if (!value) return "/";
+  try {
+    const url = new URL(String(value), window.location.origin);
+    const pathname = url.pathname.replace(/\/+$/, "") || "/";
+    if (url.origin !== window.location.origin || !isKnownPublicPath(pathname) || authModalRoutePaths.has(pathname)) return "/";
+    return `${pathname}${url.search}${url.hash}`;
+  } catch {
+    return "/";
+  }
+}
+
 function closeProfileDialogForRouteChange() {
   if (!profileDialog?.open) return;
   suppressProfileCloseRouteSync = true;
   profileDialog.close();
+}
+
+function closeAuthDialogForRouteChange() {
+  if (!authDialog?.open) return;
+  suppressAuthCloseRouteSync = true;
+  authDialog.close();
 }
 
 function syncRouteAfterProfileClose() {
@@ -549,6 +569,17 @@ function syncRouteAfterProfileClose() {
     window.history.back();
     return;
   }
+  navigatePublicRoute(returnUrl, { replace: true });
+}
+
+function syncRouteAfterAuthClose() {
+  if (suppressAuthCloseRouteSync) {
+    suppressAuthCloseRouteSync = false;
+    return;
+  }
+  const { pathname } = currentPublicRoute();
+  if (!authModalRoutePaths.has(pathname)) return;
+  const returnUrl = validAuthReturnUrl(window.history.state?.zcsAuthReturnUrl);
   navigatePublicRoute(returnUrl, { replace: true });
 }
 
@@ -578,7 +609,7 @@ async function runPublicRouteAction(action) {
   if (!action) return;
   if (action === "login" || action === "register") {
     if (currentUser) {
-      await openProfile();
+      syncRouteAfterAuthClose();
       return;
     }
     openAuth(action);
@@ -616,6 +647,7 @@ function applyPublicRoute({ behavior = "auto", runAction = true } = {}) {
   }
   if (!route) return false;
   if (!profileModalRoutePaths.has(pathname)) closeProfileDialogForRouteChange();
+  if (!authModalRoutePaths.has(pathname)) closeAuthDialogForRouteChange();
   syncPublicRouteView(pathname);
 
   if (productSlug) {
@@ -664,6 +696,13 @@ function navigatePublicRoute(path, { replace = false } = {}) {
         ? validProfileReturnUrl(window.history.state?.zcsProfileReturnUrl)
         : validProfileReturnUrl(currentRelativeUrl())
     }
+    : authModalRoutePaths.has(normalizedPath)
+      ? {
+        zcsAuthModalEntry: !replace,
+        zcsAuthReturnUrl: authModalRoutePaths.has(currentRoute.pathname)
+          ? validAuthReturnUrl(window.history.state?.zcsAuthReturnUrl)
+          : validAuthReturnUrl(currentRelativeUrl())
+      }
     : {};
   window.history[replace ? "replaceState" : "pushState"](historyState, "", nextUrl);
   return applyPublicRoute({ behavior: "smooth" });
@@ -6767,6 +6806,7 @@ closeAuthButton.addEventListener("click", () => {
 authDialog.addEventListener("cancel", () => {
   pendingProfileSaveAfterAuth = false;
 });
+authDialog.addEventListener("close", syncRouteAfterAuthClose);
 authSwitchButton.addEventListener("click", () => setAuthMode(authMode === "login" ? "register" : "login"));
 authForgotButton.addEventListener("click", () => setAuthMode("forgot"));
 cancelTemplateEditButton.addEventListener("click", resetTemplateEditor);

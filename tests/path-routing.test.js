@@ -51,10 +51,15 @@ test("browser navigation uses the History API without page reloads", () => {
   assert.match(client, /window\.addEventListener\("popstate"/);
   assert.match(client, /window\.caseEditorRouter = Object\.freeze/);
   assert.match(client, /const profileModalRoutePaths = new Set\(\["\/profile", "\/designs", "\/orders"\]\)/);
+  assert.match(client, /const authModalRoutePaths = new Set\(\["\/login", "\/register"\]\)/);
   assert.match(client, /zcsProfileModalEntry: !replace/);
   assert.match(client, /zcsProfileReturnUrl:/);
+  assert.match(client, /zcsAuthReturnUrl:/);
   assert.match(client, /profileDialog\?\.addEventListener\("close", syncRouteAfterProfileClose\)/);
+  assert.match(client, /authDialog\.addEventListener\("close", syncRouteAfterAuthClose\)/);
   assert.match(client, /if \(!profileModalRoutePaths\.has\(pathname\)\) closeProfileDialogForRouteChange\(\)/);
+  assert.match(client, /if \(!authModalRoutePaths\.has\(pathname\)\) closeAuthDialogForRouteChange\(\)/);
+  assert.match(client, /if \(currentUser\) \{\s*syncRouteAfterAuthClose\(\);/);
   assert.match(index, /href="\/styles\.css\?v=/);
   assert.match(index, /src="\/script\.js\?v=/);
   assert.match(index, /href="\/how-it-works" data-route/);
