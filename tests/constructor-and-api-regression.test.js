@@ -147,6 +147,19 @@ test("customer storefront shows model pricing and prevents unavailable orders", 
   assert.doesNotMatch(scriptSource, /срок может увеличиться примерно на 7 дней/);
 });
 
+test("case price defaults to 899 rubles across storefront, checkout, and new models", () => {
+  assert.match(htmlSource, /Чехол со своим дизайном от 899 ₽/);
+  assert.match(htmlSource, /id="heroPrice">от 899 ₽/);
+  assert.match(htmlSource, /id="modelPrice">899 ₽/);
+  assert.match(scriptSource, /const defaultCasePrice = 899;/);
+  assert.match(scriptSource, /retailPrice: Number\(row\.retailPrice \?\? defaultCasePrice\)/);
+  assert.match(scriptSource, /model\?\.retailPrice \?\? defaultCasePrice/);
+  assert.match(serverSource, /const defaultCasePrice = 899;/);
+  assert.match(serverSource, /slug, retail_price, camera_type/);
+  assert.doesNotMatch(htmlSource, /1 990 ₽/);
+  assert.doesNotMatch(scriptSource, /\b1990\b/);
+});
+
 test("checkout requires enough delivery data and continues to payment", () => {
   assert.match(scriptSource, /name="city"[^>]*required/);
   assert.match(scriptSource, /name="address"[^>]*required/);

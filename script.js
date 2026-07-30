@@ -1,3 +1,4 @@
+const defaultCasePrice = 899;
 const fallbackModels = [
   { id: 1, name: "iPhone 15 Pro Max", w: 330, h: 680, r: 56, camera: "iphone-pro", color: "#d8d0c4" },
   { id: 2, name: "iPhone 15 / 15 Plus", w: 326, h: 668, r: 54, camera: "iphone-dual", color: "#d9eef0" },
@@ -115,7 +116,7 @@ const fallbackTemplates = [
 
 const tokenKey = "caseEditorToken";
 const sessionUserKey = "caseEditorUser";
-const modelsCacheKey = "caseEditorModels";
+const modelsCacheKey = "caseEditorModelsV2";
 const templatesCacheKey = "caseEditorTemplates";
 const stickersCacheKey = "caseEditorStickers";
 const avatarOptionsCacheKey = "caseEditorAvatarOptions";
@@ -371,7 +372,7 @@ const configuredApiBase = window.__API_BASE__ || (window.location.protocol === "
 const apiBase = String(configuredApiBase || "").trim().replace(/\/+$/, "");
 const publicRouteDefinitions = Object.freeze({
   "/": {
-    title: "Чехол со своим дизайном от 1 990 ₽ | ZestCaseSoul",
+    title: "Чехол со своим дизайном от 899 ₽ | ZestCaseSoul",
     description: "Создайте чехол со своими фото и надписями: выберите модель телефона, соберите дизайн онлайн и сразу посмотрите результат до заказа.",
     target: "#top"
   },
@@ -1345,7 +1346,7 @@ function normalizeModel(row) {
     supplierSku: row.supplierSku || "",
     caseMaterial: row.caseMaterial || "TPU",
     caseColor: row.caseColor || "transparent",
-    retailPrice: Number(row.retailPrice ?? 1990),
+    retailPrice: Number(row.retailPrice ?? defaultCasePrice),
     oldPrice: row.oldPrice == null ? null : Number(row.oldPrice),
     productionDays: Number(row.productionDays ?? 3),
     w: row.caseWidth ?? row.w,
@@ -1379,9 +1380,9 @@ function dayWord(value) {
 function updateHeroPrice() {
   if (!heroPrice) return;
   const prices = models
-    .map((model) => Number(model.retailPrice ?? 1990))
+    .map((model) => Number(model.retailPrice ?? defaultCasePrice))
     .filter((price) => Number.isFinite(price) && price > 0);
-  const minimum = prices.length ? Math.min(...prices) : 1990;
+  const minimum = prices.length ? Math.min(...prices) : defaultCasePrice;
   heroPrice.textContent = `от ${moneyLabel(minimum)}`;
 }
 
@@ -1391,7 +1392,7 @@ function isModelUnavailable(model = selectedModel()) {
 
 function updateModelSummary(model) {
   if (!model) return;
-  const price = Number(model.retailPrice ?? 1990);
+  const price = Number(model.retailPrice ?? defaultCasePrice);
   const oldPrice = Number(model.oldPrice || 0);
   const productionDays = Math.max(1, Number(model.productionDays ?? 3));
   const unavailable = isModelUnavailable(model);
@@ -5062,7 +5063,7 @@ function openCheckoutDialog(designs) {
     dialog.id = "checkoutDialog";
     const total = designs.reduce((sum, design) => {
       const model = models.find((item) => Number(item.id) === Number(design.phoneModelId));
-      return sum + Number(model?.retailPrice ?? 1990);
+      return sum + Number(model?.retailPrice ?? defaultCasePrice);
     }, 0);
     const modelNames = designs.map((design) => {
       const model = models.find((item) => Number(item.id) === Number(design.phoneModelId));

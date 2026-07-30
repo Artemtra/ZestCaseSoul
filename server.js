@@ -30,6 +30,7 @@ const paymentTestMode = String(process.env.PAYMENT_TEST_MODE || "false").toLower
 const yookassaShopId = process.env.YOOKASSA_SHOP_ID || "";
 const yookassaSecretKey = process.env.YOOKASSA_SECRET_KEY || "";
 const defaultDeliveryAmount = Number(process.env.DEFAULT_DELIVERY_AMOUNT || 0);
+const defaultCasePrice = 899;
 const legalDocumentVersion = "2026-07-29";
 const allowedImageTypes = new Map([
   ["image/png", "png"],
@@ -2520,8 +2521,8 @@ app.post("/api/admin/models", requireAuth, requireAdmin, modelUpload, async (req
     const slug = `${baseSlug || "model"}-${Date.now()}`;
     const [maxRows] = await pool.query("SELECT COALESCE(MAX(sort_order), 0) + 10 AS nextSort FROM phone_models");
     const [result] = await pool.query(
-      "INSERT INTO phone_models (category_id, name, slug, camera_type, case_width, case_height, corner_radius, frame_width, color, logo, phone_image_url, camera_image_url, camera_mask_url, camera_work_url, camera_editor_state, camera_offset_x, camera_offset_y, camera_scale, in_stock, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [payload.categoryId, payload.name, slug, payload.cameraType, payload.caseWidth, payload.caseHeight, payload.cornerRadius, payload.frameWidth, payload.color, payload.logo, phoneImageUrl, cameraImageUrl, cameraMaskUrl, cameraWorkUrl, cameraEditorState, payload.cameraOffsetX, payload.cameraOffsetY, payload.cameraScale, payload.inStock ? 1 : 0, Number(maxRows[0].nextSort)]
+      "INSERT INTO phone_models (category_id, name, slug, retail_price, camera_type, case_width, case_height, corner_radius, frame_width, color, logo, phone_image_url, camera_image_url, camera_mask_url, camera_work_url, camera_editor_state, camera_offset_x, camera_offset_y, camera_scale, in_stock, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [payload.categoryId, payload.name, slug, defaultCasePrice, payload.cameraType, payload.caseWidth, payload.caseHeight, payload.cornerRadius, payload.frameWidth, payload.color, payload.logo, phoneImageUrl, cameraImageUrl, cameraMaskUrl, cameraWorkUrl, cameraEditorState, payload.cameraOffsetX, payload.cameraOffsetY, payload.cameraScale, payload.inStock ? 1 : 0, Number(maxRows[0].nextSort)]
     );
 
     invalidatePublicData("models", "phone-model-categories");
@@ -2530,6 +2531,7 @@ app.post("/api/admin/models", requireAuth, requireAdmin, modelUpload, async (req
       categoryId: payload.categoryId,
       name: payload.name,
       slug,
+      retailPrice: defaultCasePrice,
       cameraType: payload.cameraType,
       caseWidth: payload.caseWidth,
       caseHeight: payload.caseHeight,
