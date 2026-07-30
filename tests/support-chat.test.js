@@ -23,7 +23,8 @@ test("the cat opens an accessible cartoon support chat with clear empty-state co
   assert.match(client, /if \(cornerCatCallout\) cornerCatCallout\.hidden = true;/);
   assert.match(client, /openSupportChatButton\?\.removeAttribute\("aria-describedby"\)/);
   assert.match(styles, /\.corner-cat-callout\[hidden\]/);
-  assert.match(styles, /\.corner-cat\.is-returned-focus:focus-visible \{[\s\S]*?box-shadow: none;/);
+  assert.match(styles, /\.corner-cat\.is-returned-focus:focus-visible \{[\s\S]*?outline: none;[\s\S]*?box-shadow: none;/);
+  assert.match(client, /supportChatDialog\?\.addEventListener\("cancel",[\s\S]*?openSupportChatButton\?\.classList\.add\("is-returned-focus"\)/);
   assert.match(client, /supportChatDialog\?\.addEventListener\("close",[\s\S]*?openSupportChatButton\?\.classList\.add\("is-returned-focus"\)/);
   assert.match(client, /openSupportChatButton\?\.addEventListener\("blur",[\s\S]*?classList\.remove\("is-returned-focus"\)/);
   assert.match(styles, /@keyframes corner-cat-callout-arrive/);

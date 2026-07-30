@@ -4154,6 +4154,7 @@ html {
 }
 
 .corner-cat.is-returned-focus:focus-visible {
+  outline: none;
   box-shadow: none;
 }
 

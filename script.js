@@ -6548,6 +6548,9 @@ openSupportChatButton?.addEventListener("blur", () => {
   openSupportChatButton.classList.remove("is-returned-focus");
 });
 closeSupportChatButton?.addEventListener("click", closeSupportChat);
+supportChatDialog?.addEventListener("cancel", () => {
+  openSupportChatButton?.classList.add("is-returned-focus");
+});
 supportChatDialog?.addEventListener("close", () => {
   stopSupportPolling();
   cornerCatWidget?.classList.remove("is-chat-open");
