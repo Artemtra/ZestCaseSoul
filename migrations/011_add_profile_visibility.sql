@@ -1,0 +1,2 @@
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS profile_public TINYINT(1) NOT NULL DEFAULT 0 AFTER email_verified_at;

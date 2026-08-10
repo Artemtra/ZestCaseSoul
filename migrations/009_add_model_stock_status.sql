@@ -1,0 +1,2 @@
+ALTER TABLE phone_models
+  ADD COLUMN IF NOT EXISTS in_stock TINYINT(1) NOT NULL DEFAULT 1 AFTER camera_scale;

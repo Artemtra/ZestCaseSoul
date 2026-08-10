@@ -1,0 +1,2 @@
+ALTER TABLE phone_models
+  ADD COLUMN IF NOT EXISTS frame_width TINYINT UNSIGNED NOT NULL DEFAULT 18 AFTER corner_radius;

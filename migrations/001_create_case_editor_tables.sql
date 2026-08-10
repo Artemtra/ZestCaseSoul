@@ -1,0 +1,34 @@
+CREATE TABLE IF NOT EXISTS phone_models (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  slug VARCHAR(140) NOT NULL UNIQUE,
+  camera_type VARCHAR(60) NOT NULL,
+  case_width SMALLINT UNSIGNED NOT NULL,
+  case_height SMALLINT UNSIGNED NOT NULL,
+  corner_radius SMALLINT UNSIGNED NOT NULL,
+  color CHAR(7) NOT NULL,
+  logo VARCHAR(40) NULL,
+  sort_order INT UNSIGNED NOT NULL DEFAULT 100,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS case_templates (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  phone_model_id INT UNSIGNED NULL,
+  title VARCHAR(160) NOT NULL,
+  image_url VARCHAR(500) NOT NULL,
+  original_filename VARCHAR(255) NULL,
+  mime_type VARCHAR(120) NULL,
+  file_size INT UNSIGNED NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_case_templates_phone_model
+    FOREIGN KEY (phone_model_id) REFERENCES phone_models(id)
+    ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE INDEX idx_case_templates_active_created ON case_templates (is_active, created_at);
+CREATE INDEX idx_case_templates_phone_model ON case_templates (phone_model_id);
