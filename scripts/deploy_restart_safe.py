@@ -10,7 +10,7 @@ from pathlib import Path
 import paramiko
 
 
-HOST = "45.153.191.247"
+HOST = "139.100.235.67"
 USER = "root"
 APP_DIR = "/var/www/zestcasesoul"
 SERVICE = "zestcasesoul"
@@ -37,6 +37,7 @@ def main():
     remote_archive = f"/tmp/zestcasesoul-deploy-{stamp}.tgz"
     release_dir = f"/tmp/zestcasesoul-release-{stamp}"
     backup_dir = f"/root/zestcasesoul-code-backups/{stamp}"
+    database_backup_dir = f"/root/zestcasesoul-backups/{stamp}-before-deploy"
 
     print(f"Creating archive: {archive}")
     run_local([
@@ -68,12 +69,39 @@ def main():
 set -euo pipefail
 APP_DIR={shlex.quote(APP_DIR)}
 BACKUP_DIR={shlex.quote(backup_dir)}
+DATABASE_BACKUP_DIR={shlex.quote(database_backup_dir)}
 BACKUP_ROOT=/root/zestcasesoul-code-backups
 ARCHIVE={shlex.quote(remote_archive)}
 RELEASE_DIR={shlex.quote(release_dir)}
 SERVICE={shlex.quote(SERVICE)}
 
-mkdir -p "$BACKUP_DIR"
+mkdir -p "$BACKUP_DIR" "$DATABASE_BACKUP_DIR"
+cd "$APP_DIR"
+node - "$DATABASE_BACKUP_DIR/database.sql" <<'NODE'
+const fs = require("node:fs");
+const {{ spawnSync }} = require("node:child_process");
+require("dotenv").config({{ path: "/var/www/zestcasesoul/.env" }});
+const outputPath = process.argv[2];
+const output = fs.openSync(outputPath, "w", 0o600);
+const result = spawnSync("mysqldump", [
+  "--single-transaction",
+  "--quick",
+  "--skip-lock-tables",
+  "--host", process.env.DB_HOST || "127.0.0.1",
+  "--port", String(process.env.DB_PORT || 3306),
+  "--user", process.env.DB_USER || "root",
+  process.env.DB_NAME || "case_editor"
+], {{
+  env: {{ ...process.env, MYSQL_PWD: process.env.DB_PASSWORD || "" }},
+  stdio: ["ignore", output, "pipe"]
+}});
+fs.closeSync(output);
+if (result.status !== 0) {{
+  fs.rmSync(outputPath, {{ force: true }});
+  throw new Error(String(result.stderr || "mysqldump failed"));
+}}
+NODE
+gzip -f "$DATABASE_BACKUP_DIR/database.sql"
 tar -czf "$BACKUP_DIR/code.tgz" \\
   --exclude=.env \\
   --exclude=uploads \\
@@ -129,6 +157,7 @@ done < <(
 )
 
 echo "BACKUP_DIR=$BACKUP_DIR"
+echo "DATABASE_BACKUP_DIR=$DATABASE_BACKUP_DIR"
 echo "SERVICE_STATUS=$(systemctl is-active "$SERVICE")"
 """
 
