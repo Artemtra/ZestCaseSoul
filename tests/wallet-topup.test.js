@@ -21,6 +21,7 @@ test("wallet topups have a durable payment record and useful indexes", () => {
 
 test("authenticated topups validate amount and create a YooKassa payment", () => {
   assert.match(serverSource, /app\.post\("\/api\/profile\/wallet\/topups", requireAuth/);
+  assert.match(serverSource, /!paymentTestMode && \(!yookassaShopId \|\| !yookassaSecretKey\)[\s\S]{0,180}res\.status\(503\)/);
   assert.match(serverSource, /amount < 10 \|\| amount > 100_000/);
   assert.match(serverSource, /Number\(pendingRows\[0\]\.total\) >= 5/);
   assert.match(serverSource, /type: "wallet_topup"/);

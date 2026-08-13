@@ -2334,6 +2334,10 @@ app.get("/api/profile/wallet", requireAuth, async (req, res, next) => {
 
 app.post("/api/profile/wallet/topups", requireAuth, async (req, res, next) => {
   try {
+    if (!paymentTestMode && (!yookassaShopId || !yookassaSecretKey)) {
+      res.status(503).json({ error: "Онлайн-пополнение временно недоступно: платёжный способ ещё не подключён." });
+      return;
+    }
     const rawAmount = Number(req.body.amount);
     const amount = toMoney(rawAmount);
     if (!Number.isFinite(rawAmount) || amount < 10 || amount > 100_000) {
