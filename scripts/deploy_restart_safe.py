@@ -123,7 +123,9 @@ rsync -a --delete \\
   --exclude='.agents' \\
   "$RELEASE_DIR"/ "$APP_DIR"/
 
-if id -u www-data >/dev/null 2>&1; then
+if id -u zestcase >/dev/null 2>&1; then
+  chown -R zestcase:www-data "$APP_DIR"
+elif id -u www-data >/dev/null 2>&1; then
   chown -R www-data:www-data "$APP_DIR"
 fi
 
