@@ -36,7 +36,7 @@ test("wallet capture is idempotent and follows external payment confirmation", (
   assert.match(serverSource, /order:\$\{order\.id\}:wallet-capture/);
   assert.match(serverSource, /const expectedExternalAmount = toMoney\(order\.external_amount \|\| order\.total_amount\)/);
   assert.match(serverSource, /isSucceeded && paidAmount === expectedExternalAmount[\s\S]{0,220}captureWalletReservation\(connection, order\)/);
-  assert.match(serverSource, /payment\.canceled[\s\S]{0,180}releaseWalletReservation\(connection, order\.id\)/);
+  assert.match(serverSource, /object\.status === "canceled"[\s\S]{0,180}releaseWalletReservation\(connection, order\.id\)/);
   assert.match(serverSource, /externalAmount === 0[\s\S]{0,500}captureWalletReservation\(connection, walletOrder\)/);
 });
 

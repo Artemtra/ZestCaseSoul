@@ -3443,7 +3443,7 @@ app.post("/api/payments/yookassa/webhook", async (req, res, next) => {
     const paidAmount = toMoney(object.amount?.value);
     const expectedExternalAmount = toMoney(order.external_amount || order.total_amount);
     const paidCurrency = String(object.amount?.currency || order.currency || "RUB").toUpperCase();
-    const isSucceeded = eventType === "payment.succeeded" || object.status === "succeeded";
+    const isSucceeded = object.status === "succeeded" && object.paid !== false;
 
     if (isSucceeded && paidAmount === expectedExternalAmount && paidCurrency === String(order.currency).toUpperCase()) {
       if (order.payment_status !== "paid") {
@@ -3458,7 +3458,7 @@ app.post("/api/payments/yookassa/webhook", async (req, res, next) => {
         );
         await addOrderHistory(connection, order.id, order.status, "paid", null, "Внешняя доплата подтверждена webhook ЮKassa, резерв кошелька списан.");
       }
-    } else if (eventType === "payment.canceled" || object.status === "canceled") {
+    } else if (object.status === "canceled") {
       await releaseWalletReservation(connection, order.id);
       await connection.query(
         `UPDATE orders SET payment_status = 'cancelled', status = 'cancelled', cancelled_at = COALESCE(cancelled_at, CURRENT_TIMESTAMP)

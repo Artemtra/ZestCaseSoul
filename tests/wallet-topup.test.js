@@ -35,6 +35,8 @@ test("topup webhook verifies YooKassa and credits the ledger only once", () => {
   assert.match(serverSource, /topup:\$\{topup\.id\}:capture/);
   assert.match(serverSource, /UPDATE wallet_topups SET status = 'succeeded'/);
   assert.match(serverSource, /topup\.status === "succeeded"/);
+  assert.match(serverSource, /const isSucceeded = object\.status === "succeeded" && object\.paid !== false/);
+  assert.doesNotMatch(serverSource, /eventType === "payment\.(succeeded|canceled)" \|\| object\.status/);
 });
 
 test("wallet balance and topup entry points are visible in the header and profile", () => {
