@@ -448,6 +448,80 @@ function formatMoney(value) {
   return toMoney(value).toFixed(2);
 }
 
+function subtractMoney(total, amount) {
+  return toMoney(toMoney(total) - toMoney(amount));
+}
+
+async function getWalletSnapshot(connection, userId, { lock = false } = {}) {
+  const [users] = await connection.query(
+    `SELECT wallet_balance AS walletBalance FROM users WHERE id = ?${lock ? " FOR UPDATE" : ""}`,
+    [userId]
+  );
+  if (!users.length) throw new Error("Пользователь не найден.");
+
+  const [reservationRows] = await connection.query(
+    `SELECT COALESCE(SUM(amount), 0) AS reservedBalance
+     FROM wallet_reservations
+     WHERE user_id = ? AND status = 'pending'`,
+    [userId]
+  );
+  const balance = toMoney(users[0].walletBalance);
+  const reservedBalance = toMoney(reservationRows[0]?.reservedBalance);
+  return {
+    balance,
+    reservedBalance,
+    availableBalance: subtractMoney(balance, reservedBalance)
+  };
+}
+
+async function captureWalletReservation(connection, order) {
+  const walletAmount = toMoney(order.wallet_amount ?? order.walletAmount);
+  if (walletAmount <= 0) return 0;
+  if (order.wallet_payment_status === "captured" || order.walletPaymentStatus === "captured") return walletAmount;
+
+  const [reservations] = await connection.query(
+    "SELECT id, status, amount FROM wallet_reservations WHERE order_id = ? FOR UPDATE",
+    [order.id]
+  );
+  const reservation = reservations[0];
+  if (!reservation || reservation.status !== "pending" || toMoney(reservation.amount) !== walletAmount) {
+    throw new Error("Резерв кошелька для заказа не найден.");
+  }
+
+  const [users] = await connection.query("SELECT wallet_balance AS walletBalance FROM users WHERE id = ? FOR UPDATE", [order.user_id]);
+  const currentBalance = toMoney(users[0]?.walletBalance);
+  if (!users.length || currentBalance < walletAmount) {
+    throw new Error("На балансе недостаточно средств для завершения заказа.");
+  }
+  const balanceAfter = subtractMoney(currentBalance, walletAmount);
+  await connection.query("UPDATE users SET wallet_balance = ? WHERE id = ?", [balanceAfter, order.user_id]);
+  await connection.query(
+    `INSERT INTO wallet_transactions
+     (user_id, order_id, direction, kind, amount, balance_after, reason, idempotency_key)
+     VALUES (?, ?, 'debit', 'purchase', ?, ?, ?, ?)`,
+    [order.user_id, order.id, walletAmount, balanceAfter, `Оплата заказа ${order.order_number}.`, `order:${order.id}:wallet-capture`]
+  );
+  await connection.query(
+    "UPDATE wallet_reservations SET status = 'captured', settled_at = CURRENT_TIMESTAMP WHERE id = ?",
+    [reservation.id]
+  );
+  await connection.query("UPDATE orders SET wallet_payment_status = 'captured' WHERE id = ?", [order.id]);
+  return walletAmount;
+}
+
+async function releaseWalletReservation(connection, orderId) {
+  const [result] = await connection.query(
+    `UPDATE wallet_reservations
+     SET status = 'released', settled_at = CURRENT_TIMESTAMP
+     WHERE order_id = ? AND status = 'pending'`,
+    [orderId]
+  );
+  if (result.affectedRows > 0) {
+    await connection.query("UPDATE orders SET wallet_payment_status = 'released' WHERE id = ?", [orderId]);
+  }
+  return result.affectedRows > 0;
+}
+
 function createOrderNumber() {
   const date = new Date();
   const stamp = [
@@ -535,7 +609,7 @@ async function createPaymentForOrder(order) {
       "Idempotence-Key": idempotenceKey
     },
     body: JSON.stringify({
-      amount: { value: formatMoney(order.total_amount), currency: order.currency || "RUB" },
+      amount: { value: formatMoney(order.external_amount ?? order.total_amount), currency: order.currency || "RUB" },
       capture: true,
       confirmation: {
         type: "redirect",
@@ -545,7 +619,8 @@ async function createPaymentForOrder(order) {
       metadata: {
         orderId: String(order.id),
         orderNumber: order.order_number,
-        userId: String(order.user_id)
+        userId: String(order.user_id),
+        walletAmount: formatMoney(order.wallet_amount || 0)
       }
     })
   });
@@ -660,7 +735,8 @@ function publicUser(user) {
     profilePublic: Boolean(user.profile_public ?? user.profilePublic),
     avatarOptionId: user.avatar_option_id ?? user.avatarOptionId ?? null,
     avatarUrl: user.avatar_url ?? user.avatarUrl ?? null,
-    emailVerified: Boolean(user.email_verified_at ?? user.emailVerified)
+    emailVerified: Boolean(user.email_verified_at ?? user.emailVerified),
+    walletBalance: toMoney(user.wallet_balance ?? user.walletBalance)
   };
 }
 
@@ -822,7 +898,7 @@ async function requireAuth(req, res, next) {
     }
 
     const [rows] = await pool.query(
-      `SELECT u.id, u.name, u.email, u.role, u.email_verified_at, u.profile_public, u.avatar_option_id, ao.image_url AS avatar_url
+      `SELECT u.id, u.name, u.email, u.role, u.wallet_balance, u.email_verified_at, u.profile_public, u.avatar_option_id, ao.image_url AS avatar_url
        FROM users u
        LEFT JOIN avatar_options ao ON ao.id = u.avatar_option_id AND ao.is_active = 1
        WHERE u.id = ?`,
@@ -1212,7 +1288,7 @@ app.post("/api/auth/register", async (req, res, next) => {
     }
 
     const [existing] = await pool.query(
-      `SELECT u.id, u.name, u.email, u.role, u.email_verified_at, u.profile_public, u.avatar_option_id, ao.image_url AS avatar_url
+      `SELECT u.id, u.name, u.email, u.role, u.wallet_balance, u.email_verified_at, u.profile_public, u.avatar_option_id, ao.image_url AS avatar_url
        FROM users u
        LEFT JOIN avatar_options ao ON ao.id = u.avatar_option_id AND ao.is_active = 1
        WHERE u.email = ?`,
@@ -1255,7 +1331,7 @@ app.post("/api/auth/register", async (req, res, next) => {
         [name, email, passwordHash, role]
       );
 
-    const user = { id: result.insertId, name, email, role, profile_public: 0, avatar_option_id: null, avatar_url: null, email_verified_at: emailVerificationEnabled ? null : new Date() };
+    const user = { id: result.insertId, name, email, role, wallet_balance: 0, profile_public: 0, avatar_option_id: null, avatar_url: null, email_verified_at: emailVerificationEnabled ? null : new Date() };
     if (!emailVerificationEnabled) {
       const token = signToken({ userId: user.id, exp: Date.now() + 1000 * 60 * 60 * 24 * 7 });
       res.status(201).json({ token, user: publicUser(user) });
@@ -1278,7 +1354,7 @@ app.post("/api/auth/login", async (req, res, next) => {
     const email = String(req.body.email || "").trim().toLowerCase();
     const password = String(req.body.password || "");
     const [rows] = await pool.query(
-      `SELECT u.id, u.name, u.email, u.password_hash, u.role, u.email_verified_at, u.profile_public, u.avatar_option_id, ao.image_url AS avatar_url
+      `SELECT u.id, u.name, u.email, u.password_hash, u.role, u.wallet_balance, u.email_verified_at, u.profile_public, u.avatar_option_id, ao.image_url AS avatar_url
        FROM users u
        LEFT JOIN avatar_options ao ON ao.id = u.avatar_option_id AND ao.is_active = 1
        WHERE u.email = ?`,
@@ -1326,7 +1402,7 @@ app.post("/api/auth/verify-email", async (req, res, next) => {
       }
 
       const [codeRows] = await pool.query(
-        `SELECT evt.id AS token_id, evt.token_hash, u.id, u.name, u.email, u.role, u.email_verified_at, u.profile_public, u.avatar_option_id, ao.image_url AS avatar_url
+        `SELECT evt.id AS token_id, evt.token_hash, u.id, u.name, u.email, u.role, u.wallet_balance, u.email_verified_at, u.profile_public, u.avatar_option_id, ao.image_url AS avatar_url
          FROM email_verification_tokens evt
          JOIN users u ON u.id = evt.user_id
          LEFT JOIN avatar_options ao ON ao.id = u.avatar_option_id AND ao.is_active = 1
@@ -1338,7 +1414,7 @@ app.post("/api/auth/verify-email", async (req, res, next) => {
     } else if (token) {
       const tokenHash = hashToken(token);
       const [tokenRows] = await pool.query(
-        `SELECT evt.id AS token_id, u.id, u.name, u.email, u.role, u.email_verified_at, u.profile_public, u.avatar_option_id, ao.image_url AS avatar_url
+        `SELECT evt.id AS token_id, u.id, u.name, u.email, u.role, u.wallet_balance, u.email_verified_at, u.profile_public, u.avatar_option_id, ao.image_url AS avatar_url
          FROM email_verification_tokens evt
          JOIN users u ON u.id = evt.user_id
          LEFT JOIN avatar_options ao ON ao.id = u.avatar_option_id AND ao.is_active = 1
@@ -1749,23 +1825,33 @@ app.post("/api/profile/designs/pay", requireAuth, async (req, res, next) => {
       const deliveryAmount = toMoney(defaultDeliveryAmount);
       const discountAmount = 0;
       const totalAmount = toMoney(productsAmount + deliveryAmount - discountAmount);
+      const walletSnapshot = await getWalletSnapshot(connection, req.user.id, { lock: true });
+      const walletAmount = Math.min(totalAmount, walletSnapshot.availableBalance);
+      const externalAmount = subtractMoney(totalAmount, walletAmount);
       const orderNumber = createOrderNumber();
       const paymentIdempotenceKey = crypto.randomUUID();
+      const initialWalletStatus = walletAmount > 0 ? "reserved" : "none";
+      const initialPaymentProvider = externalAmount > 0
+        ? (paymentTestMode ? "test" : paymentProvider)
+        : "wallet";
 
       const [orderResult] = await connection.query(
         `INSERT INTO orders
-         (order_number, user_id, status, payment_status, payment_provider, payment_idempotence_key,
-          products_amount, delivery_amount, discount_amount, total_amount, currency,
+         (order_number, user_id, status, payment_status, wallet_payment_status, payment_provider, payment_idempotence_key,
+          products_amount, delivery_amount, discount_amount, wallet_amount, external_amount, total_amount, currency,
           recipient_name, recipient_phone, recipient_email, delivery_method, city, postal_code, address, customer_comment)
-         VALUES (?, ?, 'new', 'pending', ?, ?, ?, ?, ?, ?, 'RUB', ?, ?, ?, 'manual', ?, ?, ?, ?)`,
+         VALUES (?, ?, 'new', 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RUB', ?, ?, ?, 'manual', ?, ?, ?, ?)`,
         [
           orderNumber,
           req.user.id,
-          paymentTestMode ? "test" : paymentProvider,
+          initialWalletStatus,
+          initialPaymentProvider,
           paymentIdempotenceKey,
           productsAmount,
           deliveryAmount,
           discountAmount,
+          walletAmount,
+          externalAmount,
           totalAmount,
           recipientName,
           recipientPhone,
@@ -1777,6 +1863,14 @@ app.post("/api/profile/designs/pay", requireAuth, async (req, res, next) => {
         ]
       );
       const orderId = orderResult.insertId;
+
+      if (walletAmount > 0) {
+        await connection.query(
+          `INSERT INTO wallet_reservations (user_id, order_id, amount, status)
+           VALUES (?, ?, ?, 'pending')`,
+          [req.user.id, orderId, walletAmount]
+        );
+      }
 
       for (const design of designs) {
         const sourceImages = parseJsonValue(design.source_images_json, []);
@@ -1812,14 +1906,36 @@ app.post("/api/profile/designs/pay", requireAuth, async (req, res, next) => {
         req.user.id,
         `Заказ создан клиентом. Приняты оферта и политика обработки персональных данных, версия ${legalDocumentVersion}.`
       );
+
+      if (externalAmount === 0) {
+        const walletOrder = {
+          id: orderId,
+          order_number: orderNumber,
+          user_id: req.user.id,
+          wallet_amount: walletAmount,
+          wallet_payment_status: initialWalletStatus
+        };
+        await captureWalletReservation(connection, walletOrder);
+        await connection.query(
+          `UPDATE orders
+           SET payment_status = 'paid', status = 'paid', payment_provider = 'wallet', paid_at = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [orderId]
+        );
+        await addOrderHistory(connection, orderId, "new", "paid", req.user.id, "Заказ полностью оплачен из кошелька.");
+      }
       await connection.commit();
       createdOrder = {
         id: orderId,
         order_number: orderNumber,
         user_id: req.user.id,
         total_amount: totalAmount,
+        wallet_amount: walletAmount,
+        external_amount: externalAmount,
         currency: "RUB",
         payment_idempotence_key: paymentIdempotenceKey,
+        payment_status: externalAmount === 0 ? "paid" : "pending",
+        status: externalAmount === 0 ? "paid" : "new",
         legalAcceptedAt
       };
     } catch (error) {
@@ -1829,11 +1945,45 @@ app.post("/api/profile/designs/pay", requireAuth, async (req, res, next) => {
       connection.release();
     }
 
-    const payment = await createPaymentForOrder(createdOrder);
-    await pool.query(
-      `UPDATE orders SET payment_provider = ?, payment_id = ?, payment_idempotence_key = ? WHERE id = ?`,
-      [payment.provider, payment.paymentId, payment.idempotenceKey || createdOrder.payment_idempotence_key, createdOrder.id]
-    );
+    let payment;
+    if (createdOrder.external_amount > 0) {
+      try {
+        payment = await createPaymentForOrder(createdOrder);
+        await pool.query(
+          `UPDATE orders SET payment_provider = ?, payment_id = ?, payment_idempotence_key = ? WHERE id = ?`,
+          [payment.provider, payment.paymentId, payment.idempotenceKey || createdOrder.payment_idempotence_key, createdOrder.id]
+        );
+      } catch (error) {
+        const cleanupConnection = await pool.getConnection();
+        try {
+          await cleanupConnection.beginTransaction();
+          const [orders] = await cleanupConnection.query("SELECT id, status FROM orders WHERE id = ? FOR UPDATE", [createdOrder.id]);
+          if (orders.length) {
+            await releaseWalletReservation(cleanupConnection, createdOrder.id);
+            await cleanupConnection.query(
+              `UPDATE orders
+               SET payment_status = 'failed', status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP
+               WHERE id = ? AND payment_status <> 'paid'`,
+              [createdOrder.id]
+            );
+            await addOrderHistory(cleanupConnection, createdOrder.id, orders[0].status, "cancelled", req.user.id, "Не удалось создать внешний платёж. Резерв кошелька освобождён.");
+          }
+          await cleanupConnection.commit();
+        } catch (cleanupError) {
+          await cleanupConnection.rollback();
+          console.error(`[wallet-cleanup] ${cleanupError.message}`);
+        } finally {
+          cleanupConnection.release();
+        }
+        throw error;
+      }
+    } else {
+      payment = {
+        provider: "wallet",
+        paymentId: null,
+        confirmationUrl: null
+      };
+    }
     await writeAudit({
       userId: req.user.id,
       action: "order_created",
@@ -1842,6 +1992,8 @@ app.post("/api/profile/designs/pay", requireAuth, async (req, res, next) => {
       newData: {
         orderNumber: createdOrder.order_number,
         totalAmount: createdOrder.total_amount,
+        walletAmount: createdOrder.wallet_amount,
+        externalAmount: createdOrder.external_amount,
         paymentProvider: payment.provider,
         legalDocumentVersion,
         legalAcceptedAt: createdOrder.legalAcceptedAt
@@ -1850,13 +2002,19 @@ app.post("/api/profile/designs/pay", requireAuth, async (req, res, next) => {
     });
 
     res.status(201).json({
-      message: "Заказ создан. Перейдите к оплате, чтобы передать его в производство.",
+      message: createdOrder.external_amount === 0
+        ? "Заказ полностью оплачен из кошелька и передан в обработку."
+        : createdOrder.wallet_amount > 0
+          ? `Из кошелька учтено ${formatMoney(createdOrder.wallet_amount)} ₽. Осталось оплатить ${formatMoney(createdOrder.external_amount)} ₽.`
+          : `Заказ создан. Осталось оплатить ${formatMoney(createdOrder.external_amount)} ₽.`,
       order: {
         id: createdOrder.id,
         orderNumber: createdOrder.order_number,
-        paymentStatus: "pending",
-        status: "new",
+        paymentStatus: createdOrder.payment_status,
+        status: createdOrder.status,
         totalAmount: createdOrder.total_amount,
+        walletAmount: createdOrder.wallet_amount,
+        externalAmount: createdOrder.external_amount,
         currency: createdOrder.currency
       },
       payment
@@ -1958,12 +2116,36 @@ app.delete("/api/admin/avatars/:id", requireAuth, requireAdmin, async (req, res,
 app.get("/api/admin/users", requireAuth, requireAdmin, async (_req, res, next) => {
   try {
     const [rows] = await pool.query(
-      `SELECT u.id, u.name, u.email, u.role, u.profile_public AS profilePublic, u.avatar_option_id AS avatarOptionId, ao.image_url AS avatarUrl, u.email_verified_at AS emailVerifiedAt, u.created_at AS createdAt
+      `SELECT
+         u.id,
+         u.name,
+         u.email,
+         u.role,
+         u.wallet_balance AS walletBalance,
+         COALESCE(wr.reserved_balance, 0) AS walletReservedBalance,
+         GREATEST(u.wallet_balance - COALESCE(wr.reserved_balance, 0), 0) AS walletAvailableBalance,
+         u.profile_public AS profilePublic,
+         u.avatar_option_id AS avatarOptionId,
+         ao.image_url AS avatarUrl,
+         u.email_verified_at AS emailVerifiedAt,
+         u.created_at AS createdAt
        FROM users u
        LEFT JOIN avatar_options ao ON ao.id = u.avatar_option_id AND ao.is_active = 1
+       LEFT JOIN (
+         SELECT user_id, SUM(amount) AS reserved_balance
+         FROM wallet_reservations
+         WHERE status = 'pending'
+         GROUP BY user_id
+       ) wr ON wr.user_id = u.id
        ORDER BY u.created_at DESC, u.id DESC`
     );
-    res.json(rows.map((row) => ({ ...row, emailVerified: Boolean(row.emailVerifiedAt) })));
+    res.json(rows.map((row) => ({
+      ...row,
+      emailVerified: Boolean(row.emailVerifiedAt),
+      walletBalance: toMoney(row.walletBalance),
+      walletReservedBalance: toMoney(row.walletReservedBalance),
+      walletAvailableBalance: toMoney(row.walletAvailableBalance)
+    })));
   } catch (error) {
     next(error);
   }
@@ -1987,6 +2169,106 @@ app.put("/api/admin/users/:id/role", requireAuth, requireAdmin, async (req, res,
   }
 });
 
+app.put("/api/admin/users/:id/wallet", requireAuth, requireAdmin, async (req, res, next) => {
+  const connection = await pool.getConnection();
+  try {
+    const id = Number(req.params.id);
+    const amount = Math.round(Number(req.body.amount) * 100) / 100;
+    const reason = String(req.body.reason || "").trim();
+    if (!id || !Number.isFinite(amount) || amount === 0 || Math.abs(amount) > 1_000_000) {
+      res.status(400).json({ error: "Введите сумму от -1 000 000 до 1 000 000 ₽, кроме нуля." });
+      return;
+    }
+    if (reason.length < 3 || reason.length > 500) {
+      res.status(400).json({ error: "Укажите причину изменения баланса от 3 до 500 символов." });
+      return;
+    }
+
+    await connection.beginTransaction();
+    const snapshot = await getWalletSnapshot(connection, id, { lock: true });
+    if (amount < 0 && snapshot.availableBalance < Math.abs(amount)) {
+      await connection.rollback();
+      res.status(409).json({ error: "Нельзя списать больше доступного остатка. Часть средств может быть зарезервирована заказом." });
+      return;
+    }
+    const balanceAfter = toMoney(snapshot.balance + amount);
+    await connection.query("UPDATE users SET wallet_balance = ? WHERE id = ?", [balanceAfter, id]);
+    const [transactionResult] = await connection.query(
+      `INSERT INTO wallet_transactions
+       (user_id, created_by_user_id, direction, kind, amount, balance_after, reason, idempotency_key)
+       VALUES (?, ?, ?, 'admin_adjustment', ?, ?, ?, ?)`,
+      [
+        id,
+        req.user.id,
+        amount > 0 ? "credit" : "debit",
+        Math.abs(amount),
+        balanceAfter,
+        reason,
+        `admin:${req.user.id}:${crypto.randomUUID()}`
+      ]
+    );
+    await connection.commit();
+
+    await writeAudit({
+      userId: req.user.id,
+      action: "wallet_adjusted",
+      entityType: "user",
+      entityId: id,
+      oldData: { balance: snapshot.balance },
+      newData: { balance: balanceAfter, amount, reason, transactionId: transactionResult.insertId },
+      req
+    });
+    res.json({
+      message: amount > 0 ? "Кошелёк пополнен." : "Средства списаны из кошелька.",
+      walletBalance: balanceAfter,
+      walletReservedBalance: snapshot.reservedBalance,
+      walletAvailableBalance: subtractMoney(balanceAfter, snapshot.reservedBalance)
+    });
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
+  }
+});
+
+app.get("/api/profile/wallet", requireAuth, async (req, res, next) => {
+  try {
+    const snapshot = await getWalletSnapshot(pool, req.user.id);
+    const [transactions] = await pool.query(
+      `SELECT
+         wt.id,
+         wt.direction,
+         wt.kind,
+         wt.amount,
+         wt.balance_after AS balanceAfter,
+         wt.reason,
+         wt.created_at AS createdAt,
+         o.order_number AS orderNumber
+       FROM wallet_transactions wt
+       LEFT JOIN orders o ON o.id = wt.order_id
+       WHERE wt.user_id = ?
+       ORDER BY wt.created_at DESC, wt.id DESC
+       LIMIT 20`,
+      [req.user.id]
+    );
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({
+      balance: snapshot.balance,
+      reservedBalance: snapshot.reservedBalance,
+      availableBalance: snapshot.availableBalance,
+      currency: "RUB",
+      transactions: transactions.map((transaction) => ({
+        ...transaction,
+        amount: toMoney(transaction.amount),
+        balanceAfter: toMoney(transaction.balanceAfter)
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/profile/orders", requireAuth, async (req, res, next) => {
   try {
     const [rows] = await pool.query(
@@ -1996,6 +2278,8 @@ app.get("/api/profile/orders", requireAuth, async (req, res, next) => {
         o.status,
         o.payment_status AS paymentStatus,
         o.total_amount AS totalAmount,
+        o.wallet_amount AS walletAmount,
+        o.external_amount AS externalAmount,
         o.currency,
         o.tracking_number AS trackingNumber,
         o.created_at AS createdAt,
@@ -2132,6 +2416,8 @@ app.get("/api/admin/orders", requireAuth, requireAdmin, async (req, res, next) =
         o.payment_status AS paymentStatus,
         o.payment_provider AS paymentProvider,
         o.total_amount AS totalAmount,
+        o.wallet_amount AS walletAmount,
+        o.external_amount AS externalAmount,
         o.currency,
         o.recipient_name AS recipientName,
         o.recipient_phone AS recipientPhone,
@@ -2966,11 +3252,13 @@ app.post("/api/payments/yookassa/webhook", async (req, res, next) => {
 
     const order = orders[0];
     const paidAmount = toMoney(object.amount?.value);
+    const expectedExternalAmount = toMoney(order.external_amount || order.total_amount);
     const paidCurrency = String(object.amount?.currency || order.currency || "RUB").toUpperCase();
     const isSucceeded = eventType === "payment.succeeded" || object.status === "succeeded";
 
-    if (isSucceeded && paidAmount === toMoney(order.total_amount) && paidCurrency === String(order.currency).toUpperCase()) {
+    if (isSucceeded && paidAmount === expectedExternalAmount && paidCurrency === String(order.currency).toUpperCase()) {
       if (order.payment_status !== "paid") {
+        await captureWalletReservation(connection, order);
         await connection.query(
           `UPDATE orders
            SET payment_status = 'paid',
@@ -2979,18 +3267,20 @@ app.post("/api/payments/yookassa/webhook", async (req, res, next) => {
            WHERE id = ?`,
           [order.id]
         );
-        await addOrderHistory(connection, order.id, order.status, "paid", null, "Оплата подтверждена webhook YooKassa.");
+        await addOrderHistory(connection, order.id, order.status, "paid", null, "Внешняя доплата подтверждена webhook ЮKassa, резерв кошелька списан.");
       }
     } else if (eventType === "payment.canceled" || object.status === "canceled") {
+      await releaseWalletReservation(connection, order.id);
       await connection.query(
         `UPDATE orders SET payment_status = 'cancelled', status = 'cancelled', cancelled_at = COALESCE(cancelled_at, CURRENT_TIMESTAMP)
          WHERE id = ? AND payment_status <> 'paid'`,
         [order.id]
       );
-      await addOrderHistory(connection, order.id, order.status, "cancelled", null, "Платеж отменен YooKassa.");
+      await addOrderHistory(connection, order.id, order.status, "cancelled", null, "Платёж отменён ЮKassa, резерв кошелька освобождён.");
     } else if (isSucceeded) {
+      await releaseWalletReservation(connection, order.id);
       await connection.query("UPDATE orders SET payment_status = 'failed' WHERE id = ? AND payment_status <> 'paid'", [order.id]);
-      await addOrderHistory(connection, order.id, order.status, order.status, null, "Webhook отклонен: сумма или валюта не совпали.");
+      await addOrderHistory(connection, order.id, order.status, order.status, null, "Webhook отклонён: сумма или валюта не совпали. Резерв кошелька освобождён.");
     }
 
     await connection.query("UPDATE payment_events SET processed_at = CURRENT_TIMESTAMP WHERE provider = 'yookassa' AND external_event_id = ?", [eventId]);

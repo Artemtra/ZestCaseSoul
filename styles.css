@@ -1934,6 +1934,99 @@ button.profile-visibility-button:focus-visible {
   background: rgba(255, 253, 247, 0.72);
 }
 
+.profile-wallet-card {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  overflow: hidden;
+  padding: 18px;
+  color: #fff;
+  border-radius: 20px;
+  background: var(--ink);
+}
+
+.profile-wallet-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 18px;
+  width: 46px;
+  height: 5px;
+  background: var(--accent);
+}
+
+.profile-wallet-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.profile-wallet-heading span {
+  font-weight: 950;
+}
+
+.profile-wallet-heading small,
+.profile-wallet-card > p,
+.profile-wallet-operation small,
+.profile-wallet-empty {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+.profile-wallet-balance {
+  font-family: "Unbounded", sans-serif;
+  font-size: clamp(1.55rem, 5vw, 2.15rem);
+  letter-spacing: -0.05em;
+}
+
+.profile-wallet-card > p {
+  margin: 0;
+}
+
+.profile-wallet-history {
+  display: grid;
+  gap: 7px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.24);
+}
+
+.profile-wallet-operation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.profile-wallet-operation > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.profile-wallet-operation strong {
+  overflow: hidden;
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-wallet-operation b {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+}
+
+.profile-wallet-operation b.is-credit {
+  color: #8de2bd;
+}
+
+.profile-wallet-operation b.is-debit {
+  color: #ffb49d;
+}
+
 .profile-password-panel {
   display: grid;
   justify-content: stretch;
@@ -3698,6 +3791,92 @@ html {
 
 .checkout-summary strong {
   font-family: "Unbounded", sans-serif;
+}
+
+.checkout-payment-breakdown {
+  display: grid;
+  gap: 12px;
+}
+
+.checkout-order-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.checkout-payment-breakdown dl {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  margin: 0;
+  padding-top: 11px;
+  border-top: 1px dashed rgba(16, 39, 45, 0.24);
+}
+
+.checkout-payment-breakdown dl > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.checkout-payment-breakdown :is(dt, dd) {
+  margin: 0;
+}
+
+.checkout-payment-breakdown dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.checkout-payment-breakdown dd {
+  font-weight: 900;
+}
+
+.checkout-payment-breakdown .checkout-payment-due {
+  padding-top: 7px;
+  border-top: 1px solid rgba(16, 39, 45, 0.1);
+}
+
+.checkout-payment-due dd {
+  color: var(--accent-dark);
+  font-family: "Unbounded", sans-serif;
+}
+
+.admin-wallet-controls {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(190px, 1.5fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-wallet-controls input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  outline: none;
+  background: #fff;
+}
+
+.admin-wallet-controls input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(237, 22, 49, 0.1);
+}
+
+@media (max-width: 680px) {
+  .admin-wallet-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-wallet-controls button {
+    width: 100%;
+  }
 }
 
 .checkout-fields {

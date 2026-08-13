@@ -51,6 +51,7 @@ let modelPickerCategoryId = "";
 let modelPickerModels = [];
 let modelPickerSearchTimer = null;
 let currentUser = null;
+let currentWallet = { balance: 0, reservedBalance: 0, availableBalance: 0, currency: "RUB", transactions: [] };
 let adminUsers = [];
 let adminOrders = [];
 let adminAvatars = [];
@@ -222,6 +223,9 @@ const profileDialog = document.querySelector("#profileDialog");
 const closeProfileButton = document.querySelector("#closeProfileButton");
 const profileName = document.querySelector("#profileName");
 const profileMeta = document.querySelector("#profileMeta");
+const profileWalletBalance = document.querySelector("#profileWalletBalance");
+const profileWalletAvailable = document.querySelector("#profileWalletAvailable");
+const profileWalletHistory = document.querySelector("#profileWalletHistory");
 const profileAvatarPreview = document.querySelector("#profileAvatarPreview");
 const profileAvatarList = document.querySelector("#profileAvatarList");
 const profileDesignsStatus = document.querySelector("#profileDesignsStatus");
@@ -1777,6 +1781,48 @@ function normalizeModel(row) {
 function moneyLabel(value, currency = "RUB") {
   const amount = Number(value || 0);
   return new Intl.NumberFormat("ru-RU", { style: "currency", currency }).format(amount);
+}
+
+function renderProfileWallet() {
+  if (!profileWalletBalance || !profileWalletAvailable || !profileWalletHistory) return;
+  profileWalletBalance.textContent = moneyLabel(currentWallet.balance, currentWallet.currency || "RUB");
+  profileWalletAvailable.textContent = Number(currentWallet.reservedBalance || 0) > 0
+    ? `Доступно: ${moneyLabel(currentWallet.availableBalance)} · зарезервировано: ${moneyLabel(currentWallet.reservedBalance)}`
+    : `Доступно для оплаты: ${moneyLabel(currentWallet.availableBalance)}`;
+  profileWalletHistory.innerHTML = "";
+  const transactions = Array.isArray(currentWallet.transactions) ? currentWallet.transactions.slice(0, 5) : [];
+  if (!transactions.length) {
+    const empty = document.createElement("span");
+    empty.className = "profile-wallet-empty";
+    empty.textContent = "Операций пока нет.";
+    profileWalletHistory.append(empty);
+    return;
+  }
+  transactions.forEach((transaction) => {
+    const item = document.createElement("div");
+    item.className = "profile-wallet-operation";
+    const copy = document.createElement("span");
+    const label = document.createElement("strong");
+    label.textContent = transaction.reason || (transaction.direction === "credit" ? "Пополнение" : "Списание");
+    const date = document.createElement("small");
+    date.textContent = profileOrderDateLabel(transaction.createdAt);
+    copy.append(label, date);
+    const amount = document.createElement("b");
+    amount.className = transaction.direction === "credit" ? "is-credit" : "is-debit";
+    amount.textContent = `${transaction.direction === "credit" ? "+" : "−"}${moneyLabel(transaction.amount)}`;
+    item.append(copy, amount);
+    profileWalletHistory.append(item);
+  });
+}
+
+async function loadProfileWallet() {
+  if (!currentUser) return currentWallet;
+  const wallet = await adminRequest("/api/profile/wallet", { cache: "no-store" });
+  currentWallet = wallet;
+  currentUser.walletBalance = Number(wallet.balance || 0);
+  storeSession(localStorage.getItem(tokenKey), currentUser);
+  renderProfileWallet();
+  return currentWallet;
 }
 
 function dayWord(value) {
@@ -4396,7 +4442,7 @@ function renderAdminUsers() {
     title.textContent = user.name;
     title.addEventListener("click", () => openPublicProfile(user.id));
     const meta = document.createElement("span");
-    meta.textContent = `${user.email} · ${roleLabel(user.role)} · ${user.profilePublic ? "профиль открыт" : "профиль скрыт"}`;
+    meta.textContent = `${user.email} · ${roleLabel(user.role)} · кошелёк ${moneyLabel(user.walletAvailableBalance)}${Number(user.walletReservedBalance || 0) > 0 ? ` (${moneyLabel(user.walletReservedBalance)} в резерве)` : ""} · ${user.profilePublic ? "профиль открыт" : "профиль скрыт"}`;
 
     const actions = document.createElement("div");
     actions.className = "admin-list-actions";
@@ -4424,7 +4470,39 @@ function renderAdminUsers() {
       }
     });
     actions.append(roleSelect, saveButton);
-    content.append(title, meta, actions);
+
+    const walletControls = document.createElement("div");
+    walletControls.className = "admin-wallet-controls";
+    const walletAmount = document.createElement("input");
+    walletAmount.type = "number";
+    walletAmount.step = "0.01";
+    walletAmount.inputMode = "decimal";
+    walletAmount.placeholder = "+500 или −100";
+    walletAmount.setAttribute("aria-label", `Изменение баланса пользователя ${user.name}`);
+    const walletReason = document.createElement("input");
+    walletReason.type = "text";
+    walletReason.maxLength = 500;
+    walletReason.placeholder = "Причина изменения";
+    walletReason.setAttribute("aria-label", `Причина изменения баланса пользователя ${user.name}`);
+    const walletButton = createAdminButton("Изменить баланс", "ghost mini-button", async () => {
+      const amount = Number(walletAmount.value);
+      const reason = walletReason.value.trim();
+      adminUsersMessage.textContent = "Обновляю кошелёк...";
+      try {
+        const result = await adminRequest(`/api/admin/users/${user.id}/wallet`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount, reason })
+        });
+        adminUsersMessage.textContent = result.message;
+        await loadAdminUsers();
+        if (Number(user.id) === Number(currentUser?.id)) await loadProfileWallet();
+      } catch (error) {
+        adminUsersMessage.textContent = error.message;
+      }
+    });
+    walletControls.append(walletAmount, walletReason, walletButton);
+    content.append(title, meta, actions, walletControls);
     item.append(avatar, content);
     adminUserList.append(item);
   });
@@ -4513,6 +4591,9 @@ function renderProfileOrders() {
       orderPriceLabel(order),
       profileOrderDateLabel(order.createdAt)
     ].filter(Boolean);
+    const walletPaymentDetails = Number(order.walletAmount || 0) > 0
+      ? `Кошелёк: ${moneyLabel(order.walletAmount)}${Number(order.externalAmount || 0) > 0 ? ` · доплата: ${moneyLabel(order.externalAmount)}` : ""}`
+      : "";
     item.innerHTML = `
       ${orderPreviewMarkup(order.previewWithCameraUrl)}
       <div class="profile-order-content">
@@ -4521,6 +4602,7 @@ function renderProfileOrders() {
           <span class="profile-order-status status-${escapeHtml(status)}">${escapeHtml(orderStatusText(order))}</span>
         </div>
         <span>${escapeHtml(details.join(" · "))}</span>
+        ${walletPaymentDetails ? `<span>${escapeHtml(walletPaymentDetails)}</span>` : ""}
         ${order.trackingNumber ? `<span>Трек-номер: ${escapeHtml(order.trackingNumber)}</span>` : ""}
       </div>
     `;
@@ -5490,7 +5572,18 @@ function showProfileDesign(design) {
   refreshProfileCards();
 }
 
-function openCheckoutDialog(designs) {
+async function openCheckoutDialog(designs) {
+  try {
+    await loadProfileWallet();
+  } catch {
+    currentWallet = {
+      balance: Number(currentUser?.walletBalance || 0),
+      reservedBalance: 0,
+      availableBalance: Number(currentUser?.walletBalance || 0),
+      currency: "RUB",
+      transactions: []
+    };
+  }
   return new Promise((resolve) => {
     const existing = document.querySelector("#checkoutDialog");
     if (existing) existing.remove();
@@ -5505,14 +5598,25 @@ function openCheckoutDialog(designs) {
       const model = models.find((item) => Number(item.id) === Number(design.phoneModelId));
       return model?.name || design.modelName || "Персональный чехол";
     });
+    const walletApplied = Math.min(total, Number(currentWallet.availableBalance || 0));
+    const amountToPay = Math.max(0, Math.round((total - walletApplied) * 100) / 100);
+    const paymentButtonLabel = amountToPay > 0
+      ? `Доплатить ${moneyLabel(amountToPay)}`
+      : "Оплатить из кошелька";
     dialog.innerHTML = `
       <form class="profile-card checkout-card" method="dialog">
         <button class="dialog-close" value="cancel" type="submit" aria-label="Закрыть">×</button>
         <p class="eyebrow">Оформление</p>
         <h2>Куда доставить заказ?</h2>
-        <div class="checkout-summary">
-          <span>${escapeHtml(modelNames.join(", "))} · ${designs.length} шт.</span>
-          <strong>${moneyLabel(total)}</strong>
+        <div class="checkout-summary checkout-payment-breakdown">
+          <div class="checkout-order-caption">
+            <span>${escapeHtml(modelNames.join(", "))} · ${designs.length} шт.</span>
+            <strong>${moneyLabel(total)}</strong>
+          </div>
+          <dl>
+            <div><dt>Из кошелька</dt><dd>− ${moneyLabel(walletApplied)}</dd></div>
+            <div class="checkout-payment-due"><dt>${amountToPay > 0 ? "Осталось оплатить" : "К оплате"}</dt><dd>${moneyLabel(amountToPay)}</dd></div>
+          </dl>
         </div>
         <div class="checkout-fields">
           <label><span>Имя получателя</span><input name="name" type="text" autocomplete="name" placeholder="Как к вам обращаться" value="${escapeHtml(currentUser?.name || "")}" required></label>
@@ -5523,7 +5627,7 @@ function openCheckoutDialog(designs) {
           <label class="wide"><span>Адрес или пункт выдачи</span><input name="address" type="text" autocomplete="street-address" placeholder="Улица, дом, квартира или адрес пункта выдачи" required></label>
           <label class="wide"><span>Комментарий к заказу</span><textarea name="comment" rows="3" placeholder="Необязательно"></textarea></label>
         </div>
-        <p class="checkout-note">После проверки данных будет создан заказ и откроется безопасная страница оплаты. Итоговая сумма перед оплатой будет показана ещё раз.</p>
+        <p class="checkout-note">Баланс применяется автоматически. Сервер ещё раз проверит цену и доступный остаток перед созданием заказа${amountToPay > 0 ? ", затем откроется безопасная страница для доплаты" : ""}.</p>
         <div class="checkout-consents">
           <label class="legal-consent">
             <input name="termsAccepted" type="checkbox" required>
@@ -5534,7 +5638,7 @@ function openCheckoutDialog(designs) {
             <span>Я даю согласие на обработку персональных данных в соответствии с <a href="/privacy" target="_blank" rel="noopener">политикой</a>.</span>
           </label>
         </div>
-        <button class="primary" value="submit" type="submit">Перейти к оплате</button>
+        <button class="primary" value="submit" type="submit">${paymentButtonLabel}</button>
         <button class="ghost" value="cancel" type="submit">Отмена</button>
       </form>
     `;
@@ -5697,7 +5801,7 @@ async function payProfileDesigns(designs) {
   }
   profileMeta.textContent = result.message || "Заказ создан. Оплата ожидает подтверждения.";
   selectedProfileDesignIds = new Set();
-  await loadProfileDesigns();
+  await Promise.allSettled([loadProfileDesigns(), loadProfileWallet(), loadProfileOrders()]);
   return true;
 }
 
@@ -5906,6 +6010,14 @@ async function openProfile() {
   }
   profileName.textContent = currentUser.name;
   profileMeta.textContent = `Email: ${currentUser.email}. Роль: ${roleLabel(currentUser.role)}.`;
+  currentWallet = {
+    balance: Number(currentUser.walletBalance || 0),
+    reservedBalance: 0,
+    availableBalance: Number(currentUser.walletBalance || 0),
+    currency: "RUB",
+    transactions: []
+  };
+  renderProfileWallet();
   setAvatarPreview(profileAvatarPreview, currentUser.avatarUrl, currentUser.name?.slice(0, 1) || "?");
   profileAvatarList?.classList.add("hidden");
   selectedProfileDesignIds = new Set();
@@ -5921,6 +6033,7 @@ async function openProfile() {
   else profileDialog.setAttribute("open", "");
   await Promise.allSettled([
     loadAvatarOptions(),
+    loadProfileWallet(),
     loadProfileDesigns(),
     currentUser.role === "executor" ? loadExecutorOrders() : Promise.resolve()
   ]);

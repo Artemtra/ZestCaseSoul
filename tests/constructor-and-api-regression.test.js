@@ -165,7 +165,8 @@ test("checkout requires enough delivery data and continues to payment", () => {
   assert.match(scriptSource, /name="address"[^>]*required/);
   assert.match(scriptSource, /name="termsAccepted"[^>]*required/);
   assert.match(scriptSource, /name="privacyAccepted"[^>]*required/);
-  assert.match(scriptSource, />Перейти к оплате</);
+  assert.match(scriptSource, /Доплатить \$\{moneyLabel\(amountToPay\)\}/);
+  assert.match(scriptSource, /Оплатить из кошелька/);
   assert.match(scriptSource, /const orderStarted = await payProfileDesigns\(\[savedDesign\]\)/);
   assert.match(serverSource, /!recipientEmail \|\| !city \|\| !address/);
   assert.match(serverSource, /Введите имя, телефон, email, город и адрес доставки/);

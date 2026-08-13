@@ -558,7 +558,7 @@ try {
       if (adminNavigationState.selected !== "templateCategories" || adminNavigationState.active !== "templateCategories") {
         failures.push(`${width}x${height}: admin category navigation did not activate the selected section`);
       }
-      if (adminNavigationState.editorButtons !== 7 || adminNavigationState.categoryButtons !== 3) {
+      if (adminNavigationState.editorButtons !== 8 || adminNavigationState.categoryButtons !== 3) {
         failures.push(`${width}x${height}: admin navigation groups contain the wrong number of actions`);
       }
       if (!adminNavigationState.visibleEditors.length || adminNavigationState.visibleEditors.some((value) => value !== "templateCategories")) {
