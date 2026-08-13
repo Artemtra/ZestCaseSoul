@@ -52,8 +52,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Marck+Script&family=Russo+One&family=Unbounded:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/styles.css?v=20260730-cat-focus-v27">
-    <link rel="stylesheet" href="/mobile.css?v=20260730-mobile-tap-v23">
+    <link rel="stylesheet" href="/styles.css?v=20260814-wallet-topup-v28">
+    <link rel="stylesheet" href="/mobile.css?v=20260814-wallet-panel-v24">
   </head>
   <body>
     <main class="shell" id="top">
@@ -69,11 +69,19 @@
         </div>
         <div class="auth-actions hidden" id="userActions">
           <span class="user-pill" id="userBadge"></span>
+          <button class="header-wallet-button" id="openWalletButton" type="button" aria-label="Открыть кошелёк и пополнить баланс">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h9.7A2.5 2.5 0 0 1 19 6.5V8h.5A2.5 2.5 0 0 1 22 10.5v5a2.5 2.5 0 0 1-2.5 2.5H6.8A2.8 2.8 0 0 1 4 15.2V6.8Z"></path><path d="M19 8H7a2 2 0 0 1 0-4"></path><circle cx="18" cy="13" r="1.25"></circle></svg>
+            <span><small>Кошелёк</small><strong id="headerWalletBalance">0 ₽</strong></span>
+          </button>
           <button class="ghost small-button profile-button" id="openProfileButton" type="button" title="Профиль">👤</button>
           <button class="ghost small-button hidden" id="openAdminButton" type="button">Админка</button>
           <button class="ghost small-button" id="logoutButton" type="button">Выйти</button>
         </div>
         <div class="mobile-header-actions">
+          <button class="mobile-wallet-button hidden" id="mobileWalletButton" type="button" aria-label="Открыть кошелёк и пополнить баланс">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h9.7A2.5 2.5 0 0 1 19 6.5V8h.5A2.5 2.5 0 0 1 22 10.5v5a2.5 2.5 0 0 1-2.5 2.5H6.8A2.8 2.8 0 0 1 4 15.2V6.8Z"></path><path d="M19 8H7a2 2 0 0 1 0-4"></path><circle cx="18" cy="13" r="1.25"></circle></svg>
+            <strong id="mobileWalletBalance">0 ₽</strong>
+          </button>
           <button class="mobile-account-button" id="mobileAccountButton" type="button" aria-label="Войти"><span class="mobile-account-icon" aria-hidden="true">●</span><span class="mobile-account-label">Войти</span></button>
           <button class="mobile-menu-button" id="mobileMenuButton" type="button" aria-label="Открыть меню" aria-expanded="false" aria-controls="mobileMenu">Меню</button>
         </div>
@@ -1238,6 +1246,7 @@
           </div>
           <strong class="profile-wallet-balance" id="profileWalletBalance">0 ₽</strong>
           <p id="profileWalletAvailable">Доступно для оплаты: 0 ₽</p>
+          <button class="profile-wallet-topup-button" id="profileWalletTopupButton" type="button">Пополнить баланс</button>
           <div class="profile-wallet-history" id="profileWalletHistory"></div>
         </section>
         <div class="profile-avatar-panel">
@@ -1355,6 +1364,34 @@
       </section>
     </dialog>
 
+    <dialog class="profile-dialog wallet-topup-dialog" id="walletTopupDialog">
+      <section class="profile-card wallet-topup-card">
+        <button class="dialog-close" id="closeWalletTopupButton" type="button" aria-label="Закрыть">×</button>
+        <p class="eyebrow">Кошелёк</p>
+        <h2>Пополнить баланс</h2>
+        <p class="auth-copy">Выберите сумму. После подтверждения оплаты деньги появятся в кошельке и автоматически применятся к следующему заказу.</p>
+        <form class="wallet-topup-form" id="walletTopupForm">
+          <div class="wallet-topup-presets" aria-label="Быстрый выбор суммы">
+            <button type="button" data-wallet-topup-amount="500">500 ₽</button>
+            <button type="button" data-wallet-topup-amount="1000">1 000 ₽</button>
+            <button type="button" data-wallet-topup-amount="2000">2 000 ₽</button>
+          </div>
+          <label class="wallet-topup-field">
+            <span>Сумма пополнения</span>
+            <div><input id="walletTopupAmount" name="amount" type="number" inputmode="decimal" min="10" max="100000" step="0.01" value="1000" required><span>₽</span></div>
+            <small>От 10 до 100 000 ₽ за один платёж</small>
+          </label>
+          <div class="wallet-topup-receipt" aria-live="polite">
+            <span>На баланс поступит</span>
+            <strong id="walletTopupSummary">1 000 ₽</strong>
+          </div>
+          <p class="wallet-topup-note">Оплата откроется на защищённой странице ЮKassa. Баланс зачисляется только после подтверждения платежа.</p>
+          <button class="primary" id="walletTopupSubmitButton" type="submit">Перейти к оплате</button>
+          <p class="admin-message" id="walletTopupMessage" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+    </dialog>
+
     <div class="corner-cat-widget" id="cornerCatWidget">
       <span class="corner-cat-callout" id="cornerCatCallout">Нажми на меня!</span>
       <button class="corner-cat" id="openSupportChatButton" type="button" aria-describedby="cornerCatCallout" aria-label="Открыть чат с администратором">
@@ -1363,7 +1400,7 @@
         <span class="corner-cat-face"><span class="corner-cat-eyes"><i class="corner-cat-eye"><b class="corner-cat-pupil"></b></i><i class="corner-cat-eye corner-cat-eye-right"><b class="corner-cat-pupil"></b></i></span><i class="corner-cat-nose"></i><i class="corner-cat-mouth"></i><span class="corner-cat-whiskers corner-cat-whiskers-left"><i></i><i></i><i></i></span><span class="corner-cat-whiskers corner-cat-whiskers-right"><i></i><i></i><i></i></span></span>
       </button>
     </div>
-    <script src="/script.js?v=20260730-cat-focus-v27"></script>
+    <script src="/script.js?v=20260814-wallet-topup-v28"></script>
     <script src="/mobile-ui.js?v=20260730-support-chat-v21"></script>
 <script>
   (() => {

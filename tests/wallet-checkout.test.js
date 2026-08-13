@@ -27,7 +27,8 @@ test("checkout calculates wallet use on the server under row locks", () => {
   assert.match(serverSource, /const walletAmount = Math\.min\(totalAmount, walletSnapshot\.availableBalance\)/);
   assert.match(serverSource, /const externalAmount = subtractMoney\(totalAmount, walletAmount\)/);
   assert.doesNotMatch(serverSource, /req\.body\.(walletAmount|externalAmount|walletBalance)/);
-  assert.match(serverSource, /amount: \{ value: formatMoney\(order\.external_amount \?\? order\.total_amount\)/);
+  assert.match(serverSource, /amount: order\.external_amount \?\? order\.total_amount/);
+  assert.match(serverSource, /amount: \{ value: formatMoney\(amount\), currency \}/);
 });
 
 test("wallet capture is idempotent and follows external payment confirmation", () => {

@@ -51,7 +51,9 @@ let modelPickerCategoryId = "";
 let modelPickerModels = [];
 let modelPickerSearchTimer = null;
 let currentUser = null;
-let currentWallet = { balance: 0, reservedBalance: 0, availableBalance: 0, currency: "RUB", transactions: [] };
+let currentWallet = { balance: 0, reservedBalance: 0, availableBalance: 0, currency: "RUB", transactions: [], pendingTopups: [] };
+let walletLoadRequest = null;
+let walletLoadedAt = 0;
 let adminUsers = [];
 let adminOrders = [];
 let adminAvatars = [];
@@ -202,6 +204,10 @@ const openRegisterButton = document.querySelector("#openRegisterButton");
 const logoutButton = document.querySelector("#logoutButton");
 const openAdminButton = document.querySelector("#openAdminButton");
 const openProfileButton = document.querySelector("#openProfileButton");
+const openWalletButton = document.querySelector("#openWalletButton");
+const headerWalletBalance = document.querySelector("#headerWalletBalance");
+const mobileWalletButton = document.querySelector("#mobileWalletButton");
+const mobileWalletBalance = document.querySelector("#mobileWalletBalance");
 const backToClientButton = document.querySelector("#backToClientButton");
 const authDialog = document.querySelector("#authDialog");
 const authForm = document.querySelector("#authForm");
@@ -226,6 +232,14 @@ const profileMeta = document.querySelector("#profileMeta");
 const profileWalletBalance = document.querySelector("#profileWalletBalance");
 const profileWalletAvailable = document.querySelector("#profileWalletAvailable");
 const profileWalletHistory = document.querySelector("#profileWalletHistory");
+const profileWalletTopupButton = document.querySelector("#profileWalletTopupButton");
+const walletTopupDialog = document.querySelector("#walletTopupDialog");
+const closeWalletTopupButton = document.querySelector("#closeWalletTopupButton");
+const walletTopupForm = document.querySelector("#walletTopupForm");
+const walletTopupAmount = document.querySelector("#walletTopupAmount");
+const walletTopupSummary = document.querySelector("#walletTopupSummary");
+const walletTopupSubmitButton = document.querySelector("#walletTopupSubmitButton");
+const walletTopupMessage = document.querySelector("#walletTopupMessage");
 const profileAvatarPreview = document.querySelector("#profileAvatarPreview");
 const profileAvatarList = document.querySelector("#profileAvatarList");
 const profileDesignsStatus = document.querySelector("#profileDesignsStatus");
@@ -1063,6 +1077,9 @@ function clearPrivateClientState() {
   executorOrders = [];
   adminOrders = [];
   adminUsers = [];
+  currentWallet = { balance: 0, reservedBalance: 0, availableBalance: 0, currency: "RUB", transactions: [], pendingTopups: [] };
+  walletLoadedAt = 0;
+  walletLoadRequest = null;
 }
 
 function decorateImage(image, { lazy = true } = {}) {
@@ -1221,10 +1238,13 @@ function updateAuthUi() {
     userBadge.textContent = `${currentUser.name} · ${roleLabel(currentUser.role)}`;
     setAvatarPreview(openProfileButton, currentUser.avatarUrl, currentUser.name?.slice(0, 1) || "?");
     openAdminButton.classList.toggle("hidden", currentUser.role !== "admin");
+    mobileWalletButton?.classList.remove("hidden");
+    renderHeaderWallet();
     setViewForRole(currentUser.role);
   } else {
     if (openProfileButton) openProfileButton.textContent = "👤";
     openAdminButton.classList.add("hidden");
+    mobileWalletButton?.classList.add("hidden");
     setViewForRole("client", true);
   }
 }
@@ -1331,7 +1351,12 @@ async function authRequest(path, payload) {
   bindSupportIdentityToUser(result.user);
   storeSession(result.token, result.user);
   currentUser = result.user;
+  walletLoadedAt = 0;
   updateAuthUi();
+  try {
+    await loadProfileWallet({ force: true });
+  } catch {
+  }
   authDialog.close();
   if (pendingProfileSaveAfterAuth) {
     pendingProfileSaveAfterAuth = false;
@@ -1708,6 +1733,12 @@ async function checkSession() {
     currentUser = null;
   }
   updateAuthUi();
+  if (currentUser) {
+    try {
+      await loadProfileWallet({ force: true });
+    } catch {
+    }
+  }
 }
 
 async function handleAuthLinks() {
@@ -1783,6 +1814,26 @@ function moneyLabel(value, currency = "RUB") {
   return new Intl.NumberFormat("ru-RU", { style: "currency", currency }).format(amount);
 }
 
+function headerMoneyLabel(value) {
+  const amount = Number(value || 0);
+  return new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2
+  }).format(amount);
+}
+
+function renderHeaderWallet() {
+  const amount = Number(walletLoadedAt ? currentWallet.availableBalance : currentUser?.walletBalance || 0);
+  const label = headerMoneyLabel(amount);
+  if (headerWalletBalance) headerWalletBalance.textContent = label;
+  if (mobileWalletBalance) mobileWalletBalance.textContent = label;
+  const accessibleLabel = `Кошелёк, доступно ${moneyLabel(amount)}. Нажмите, чтобы пополнить баланс.`;
+  openWalletButton?.setAttribute("aria-label", accessibleLabel);
+  mobileWalletButton?.setAttribute("aria-label", accessibleLabel);
+}
+
 function renderProfileWallet() {
   if (!profileWalletBalance || !profileWalletAvailable || !profileWalletHistory) return;
   profileWalletBalance.textContent = moneyLabel(currentWallet.balance, currentWallet.currency || "RUB");
@@ -1790,8 +1841,23 @@ function renderProfileWallet() {
     ? `Доступно: ${moneyLabel(currentWallet.availableBalance)} · зарезервировано: ${moneyLabel(currentWallet.reservedBalance)}`
     : `Доступно для оплаты: ${moneyLabel(currentWallet.availableBalance)}`;
   profileWalletHistory.innerHTML = "";
+  const pendingTopups = Array.isArray(currentWallet.pendingTopups) ? currentWallet.pendingTopups : [];
+  pendingTopups.forEach((topup) => {
+    const item = document.createElement("div");
+    item.className = "profile-wallet-operation is-pending";
+    const copy = document.createElement("span");
+    const label = document.createElement("strong");
+    label.textContent = "Пополнение ожидает подтверждения";
+    const date = document.createElement("small");
+    date.textContent = profileOrderDateLabel(topup.createdAt);
+    copy.append(label, date);
+    const amount = document.createElement("b");
+    amount.textContent = `+${moneyLabel(topup.amount)}`;
+    item.append(copy, amount);
+    profileWalletHistory.append(item);
+  });
   const transactions = Array.isArray(currentWallet.transactions) ? currentWallet.transactions.slice(0, 5) : [];
-  if (!transactions.length) {
+  if (!transactions.length && !pendingTopups.length) {
     const empty = document.createElement("span");
     empty.className = "profile-wallet-empty";
     empty.textContent = "Операций пока нет.";
@@ -1813,16 +1879,80 @@ function renderProfileWallet() {
     item.append(copy, amount);
     profileWalletHistory.append(item);
   });
+  renderHeaderWallet();
 }
 
-async function loadProfileWallet() {
+async function loadProfileWallet({ force = false } = {}) {
   if (!currentUser) return currentWallet;
-  const wallet = await adminRequest("/api/profile/wallet", { cache: "no-store" });
-  currentWallet = wallet;
-  currentUser.walletBalance = Number(wallet.balance || 0);
-  storeSession(localStorage.getItem(tokenKey), currentUser);
-  renderProfileWallet();
-  return currentWallet;
+  if (!force && walletLoadedAt && Date.now() - walletLoadedAt < 15_000) return currentWallet;
+  if (walletLoadRequest) return walletLoadRequest;
+  walletLoadRequest = (async () => {
+    const wallet = await adminRequest("/api/profile/wallet", { cache: "no-store" });
+    currentWallet = { ...wallet, pendingTopups: wallet.pendingTopups || [] };
+    currentUser.walletBalance = Number(wallet.balance || 0);
+    walletLoadedAt = Date.now();
+    storeSession(localStorage.getItem(tokenKey), currentUser);
+    renderProfileWallet();
+    return currentWallet;
+  })().finally(() => {
+    walletLoadRequest = null;
+  });
+  return walletLoadRequest;
+}
+
+function updateWalletTopupSummary() {
+  const amount = Number(walletTopupAmount?.value || 0);
+  if (walletTopupSummary) walletTopupSummary.textContent = moneyLabel(Number.isFinite(amount) ? amount : 0);
+  document.querySelectorAll("[data-wallet-topup-amount]").forEach((button) => {
+    button.classList.toggle("is-active", Number(button.dataset.walletTopupAmount) === amount);
+  });
+}
+
+function clearWalletIntentFromUrl() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("wallet") && !url.searchParams.has("walletTopup") && !url.searchParams.has("topup")) return;
+  url.searchParams.delete("wallet");
+  url.searchParams.delete("walletTopup");
+  url.searchParams.delete("topup");
+  window.history.replaceState(window.history.state || {}, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function openWalletTopupDialog() {
+  if (!currentUser) {
+    openAuth("login");
+    return;
+  }
+  if (walletTopupMessage) walletTopupMessage.textContent = "";
+  if (walletTopupAmount && !Number(walletTopupAmount.value)) walletTopupAmount.value = "1000";
+  updateWalletTopupSummary();
+  if (!walletTopupDialog?.open) {
+    if (typeof walletTopupDialog.showModal === "function") walletTopupDialog.showModal();
+    else walletTopupDialog.setAttribute("open", "");
+  }
+  walletTopupAmount?.focus();
+}
+
+async function submitWalletTopup(event) {
+  event.preventDefault();
+  const amount = Number(walletTopupAmount?.value || 0);
+  walletTopupSubmitButton.disabled = true;
+  walletTopupMessage.textContent = "Создаём безопасный платёж...";
+  try {
+    const result = await adminRequest("/api/profile/wallet/topups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount })
+    });
+    if (!result.payment?.confirmationUrl) throw new Error("Платёжная страница не получена. Попробуйте ещё раз.");
+    window.location.href = result.payment.confirmationUrl;
+  } catch (error) {
+    walletTopupMessage.textContent = error.message;
+    walletTopupSubmitButton.disabled = false;
+  }
+}
+
+function openWalletFromHeader() {
+  navigatePublicRoute("/profile?wallet=topup");
 }
 
 function dayWord(value) {
@@ -4496,7 +4626,7 @@ function renderAdminUsers() {
         });
         adminUsersMessage.textContent = result.message;
         await loadAdminUsers();
-        if (Number(user.id) === Number(currentUser?.id)) await loadProfileWallet();
+        if (Number(user.id) === Number(currentUser?.id)) await loadProfileWallet({ force: true });
       } catch (error) {
         adminUsersMessage.textContent = error.message;
       }
@@ -5574,7 +5704,7 @@ function showProfileDesign(design) {
 
 async function openCheckoutDialog(designs) {
   try {
-    await loadProfileWallet();
+    await loadProfileWallet({ force: true });
   } catch {
     currentWallet = {
       balance: Number(currentUser?.walletBalance || 0),
@@ -5801,7 +5931,7 @@ async function payProfileDesigns(designs) {
   }
   profileMeta.textContent = result.message || "Заказ создан. Оплата ожидает подтверждения.";
   selectedProfileDesignIds = new Set();
-  await Promise.allSettled([loadProfileDesigns(), loadProfileWallet(), loadProfileOrders()]);
+  await Promise.allSettled([loadProfileDesigns(), loadProfileWallet({ force: true }), loadProfileOrders()]);
   return true;
 }
 
@@ -6010,13 +6140,16 @@ async function openProfile() {
   }
   profileName.textContent = currentUser.name;
   profileMeta.textContent = `Email: ${currentUser.email}. Роль: ${roleLabel(currentUser.role)}.`;
-  currentWallet = {
-    balance: Number(currentUser.walletBalance || 0),
-    reservedBalance: 0,
-    availableBalance: Number(currentUser.walletBalance || 0),
-    currency: "RUB",
-    transactions: []
-  };
+  if (!walletLoadedAt) {
+    currentWallet = {
+      balance: Number(currentUser.walletBalance || 0),
+      reservedBalance: 0,
+      availableBalance: Number(currentUser.walletBalance || 0),
+      currency: "RUB",
+      transactions: [],
+      pendingTopups: []
+    };
+  }
   renderProfileWallet();
   setAvatarPreview(profileAvatarPreview, currentUser.avatarUrl, currentUser.name?.slice(0, 1) || "?");
   profileAvatarList?.classList.add("hidden");
@@ -6029,14 +6162,27 @@ async function openProfile() {
   profileExecutorPanel?.classList.toggle("hidden", currentUser.role !== "executor");
   updateProfileVisibilityButton();
   if (profilePasswordMessage) profilePasswordMessage.textContent = "";
-  if (typeof profileDialog.showModal === "function") profileDialog.showModal();
-  else profileDialog.setAttribute("open", "");
+  if (!profileDialog.open) {
+    if (typeof profileDialog.showModal === "function") profileDialog.showModal();
+    else profileDialog.setAttribute("open", "");
+  }
   await Promise.allSettled([
     loadAvatarOptions(),
     loadProfileWallet(),
     loadProfileDesigns(),
     currentUser.role === "executor" ? loadExecutorOrders() : Promise.resolve()
   ]);
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("wallet") === "topup") {
+    openWalletTopupDialog();
+    return;
+  }
+  if (params.has("walletTopup")) {
+    profileMeta.textContent = currentWallet.pendingTopups?.length
+      ? "Платёж принят. Ждём подтверждение ЮKassa — баланс обновится автоматически."
+      : "Баланс кошелька обновлён после оплаты.";
+    clearWalletIntentFromUrl();
+  }
 }
 
 function productionStatusText(status) {
@@ -6567,6 +6713,8 @@ window.caseEditorTools = {
 
 saveProfileButton?.addEventListener("click", saveDesignToProfile);
 openProfileButton?.addEventListener("click", () => navigatePublicRoute("/profile"));
+openWalletButton?.addEventListener("click", openWalletFromHeader);
+mobileWalletButton?.addEventListener("click", openWalletFromHeader);
 closeProfileButton?.addEventListener("click", () => profileDialog.close());
 profileDialog?.addEventListener("close", syncRouteAfterProfileClose);
 profileLogoutButton?.addEventListener("click", () => {
@@ -6582,6 +6730,17 @@ openPasswordPanelButton?.addEventListener("click", () => {
   if (profilePasswordMessage) profilePasswordMessage.textContent = "";
 });
 profileVisibilityButton?.addEventListener("click", toggleProfileVisibility);
+profileWalletTopupButton?.addEventListener("click", openWalletTopupDialog);
+closeWalletTopupButton?.addEventListener("click", () => walletTopupDialog?.close());
+walletTopupDialog?.addEventListener("close", clearWalletIntentFromUrl);
+walletTopupForm?.addEventListener("submit", submitWalletTopup);
+walletTopupAmount?.addEventListener("input", updateWalletTopupSummary);
+document.querySelectorAll("[data-wallet-topup-amount]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (walletTopupAmount) walletTopupAmount.value = button.dataset.walletTopupAmount;
+    updateWalletTopupSummary();
+  });
+});
 profileOrdersToggleButton?.addEventListener("click", () => toggleProfileOrders());
 profileOrderFilters?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-profile-order-filter]");

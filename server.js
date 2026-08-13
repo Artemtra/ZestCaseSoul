@@ -583,12 +583,13 @@ function canTransitionOrder(oldStatus, newStatus) {
   return transitions[oldStatus]?.has(newStatus) || false;
 }
 
-async function createPaymentForOrder(order) {
+async function createYookassaPayment({ amount, currency = "RUB", idempotenceKey, description, returnUrl, metadata, testPaymentId }) {
   if (paymentTestMode) {
     return {
       provider: "test",
-      paymentId: `test-${order.order_number}`,
-      confirmationUrl: `${appUrl}/?order=${encodeURIComponent(order.order_number)}&payment=test`
+      paymentId: testPaymentId,
+      idempotenceKey,
+      confirmationUrl: returnUrl
     };
   }
 
@@ -600,7 +601,6 @@ async function createPaymentForOrder(order) {
     throw new Error("YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY are required to create a real payment.");
   }
 
-  const idempotenceKey = order.payment_idempotence_key || crypto.randomUUID();
   const response = await fetch("https://api.yookassa.ru/v3/payments", {
     method: "POST",
     headers: {
@@ -609,19 +609,14 @@ async function createPaymentForOrder(order) {
       "Idempotence-Key": idempotenceKey
     },
     body: JSON.stringify({
-      amount: { value: formatMoney(order.external_amount ?? order.total_amount), currency: order.currency || "RUB" },
+      amount: { value: formatMoney(amount), currency },
       capture: true,
       confirmation: {
         type: "redirect",
-        return_url: `${appUrl}/?order=${encodeURIComponent(order.order_number)}`
+        return_url: returnUrl
       },
-      description: `ZestCaseSoul ${order.order_number}`,
-      metadata: {
-        orderId: String(order.id),
-        orderNumber: order.order_number,
-        userId: String(order.user_id),
-        walletAmount: formatMoney(order.wallet_amount || 0)
-      }
+      description,
+      metadata
     })
   });
 
@@ -636,6 +631,63 @@ async function createPaymentForOrder(order) {
     idempotenceKey,
     confirmationUrl: payload.confirmation?.confirmation_url || null
   };
+}
+
+async function createPaymentForOrder(order) {
+  const idempotenceKey = order.payment_idempotence_key || crypto.randomUUID();
+  return createYookassaPayment({
+    amount: order.external_amount ?? order.total_amount,
+    currency: order.currency || "RUB",
+    idempotenceKey,
+    description: `ZestCaseSoul ${order.order_number}`,
+    returnUrl: paymentTestMode
+      ? `${appUrl}/?order=${encodeURIComponent(order.order_number)}&payment=test`
+      : `${appUrl}/?order=${encodeURIComponent(order.order_number)}`,
+    metadata: {
+      orderId: String(order.id),
+      orderNumber: order.order_number,
+      userId: String(order.user_id),
+      walletAmount: formatMoney(order.wallet_amount || 0)
+    },
+    testPaymentId: `test-${order.order_number}`
+  });
+}
+
+async function fetchYookassaPayment(paymentId) {
+  if (!yookassaShopId || !yookassaSecretKey) {
+    throw new Error("YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY are required to verify a payment.");
+  }
+  const response = await fetch(`https://api.yookassa.ru/v3/payments/${encodeURIComponent(paymentId)}`, {
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${yookassaShopId}:${yookassaSecretKey}`).toString("base64")}`
+    }
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.description || payload?.message || `YooKassa payment verification error ${response.status}`);
+  }
+  return payload;
+}
+
+async function captureWalletTopup(connection, topup) {
+  if (topup.status === "succeeded") return false;
+  if (topup.status !== "pending") throw new Error("Пополнение уже завершено или отменено.");
+  const amount = toMoney(topup.amount);
+  const [users] = await connection.query("SELECT wallet_balance AS walletBalance FROM users WHERE id = ? FOR UPDATE", [topup.user_id]);
+  if (!users.length) throw new Error("Пользователь пополнения не найден.");
+  const balanceAfter = toMoney(toMoney(users[0].walletBalance) + amount);
+  await connection.query("UPDATE users SET wallet_balance = ? WHERE id = ?", [balanceAfter, topup.user_id]);
+  await connection.query(
+    `INSERT INTO wallet_transactions
+     (user_id, direction, kind, amount, balance_after, reason, idempotency_key)
+     VALUES (?, 'credit', 'topup', ?, ?, ?, ?)`,
+    [topup.user_id, amount, balanceAfter, "Пополнение кошелька через ЮKassa.", `topup:${topup.id}:capture`]
+  );
+  await connection.query(
+    "UPDATE wallet_topups SET status = 'succeeded', paid_at = CURRENT_TIMESTAMP WHERE id = ?",
+    [topup.id]
+  );
+  return true;
 }
 
 async function normalizeDesignPayloadAssets(sourceImagesValue, designStateValue) {
@@ -2235,7 +2287,8 @@ app.put("/api/admin/users/:id/wallet", requireAuth, requireAdmin, async (req, re
 app.get("/api/profile/wallet", requireAuth, async (req, res, next) => {
   try {
     const snapshot = await getWalletSnapshot(pool, req.user.id);
-    const [transactions] = await pool.query(
+    const [transactions, topups] = await Promise.all([
+      pool.query(
       `SELECT
          wt.id,
          wt.direction,
@@ -2251,19 +2304,93 @@ app.get("/api/profile/wallet", requireAuth, async (req, res, next) => {
        ORDER BY wt.created_at DESC, wt.id DESC
        LIMIT 20`,
       [req.user.id]
-    );
+      ).then(([rows]) => rows),
+      pool.query(
+        `SELECT topup_number AS topupNumber, amount, currency, status, created_at AS createdAt
+         FROM wallet_topups
+         WHERE user_id = ? AND status = 'pending'
+         ORDER BY created_at DESC, id DESC
+         LIMIT 5`,
+        [req.user.id]
+      ).then(([rows]) => rows)
+    ]);
     res.setHeader("Cache-Control", "private, no-store");
     res.json({
       balance: snapshot.balance,
       reservedBalance: snapshot.reservedBalance,
       availableBalance: snapshot.availableBalance,
       currency: "RUB",
+      pendingTopups: topups.map((topup) => ({ ...topup, amount: toMoney(topup.amount) })),
       transactions: transactions.map((transaction) => ({
         ...transaction,
         amount: toMoney(transaction.amount),
         balanceAfter: toMoney(transaction.balanceAfter)
       }))
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/profile/wallet/topups", requireAuth, async (req, res, next) => {
+  try {
+    const rawAmount = Number(req.body.amount);
+    const amount = toMoney(rawAmount);
+    if (!Number.isFinite(rawAmount) || amount < 10 || amount > 100_000) {
+      res.status(400).json({ error: "Введите сумму пополнения от 10 до 100 000 ₽." });
+      return;
+    }
+
+    const [pendingRows] = await pool.query(
+      `SELECT COUNT(*) AS total
+       FROM wallet_topups
+       WHERE user_id = ? AND status = 'pending' AND created_at >= CURRENT_TIMESTAMP - INTERVAL 1 HOUR`,
+      [req.user.id]
+    );
+    if (Number(pendingRows[0].total) >= 5) {
+      res.status(429).json({ error: "У вас уже есть несколько незавершённых пополнений. Завершите одно из них или попробуйте позже." });
+      return;
+    }
+
+    const topupNumber = `WLT-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+    const paymentIdempotenceKey = crypto.randomUUID();
+    const initialProvider = paymentTestMode ? "test" : "yookassa";
+    const [result] = await pool.query(
+      `INSERT INTO wallet_topups
+       (topup_number, user_id, amount, currency, status, payment_provider, payment_idempotence_key)
+       VALUES (?, ?, ?, 'RUB', 'pending', ?, ?)`,
+      [topupNumber, req.user.id, amount, initialProvider, paymentIdempotenceKey]
+    );
+    const topupId = result.insertId;
+
+    try {
+      const payment = await createYookassaPayment({
+        amount,
+        currency: "RUB",
+        idempotenceKey: paymentIdempotenceKey,
+        description: `Пополнение кошелька ZestCaseSoul ${topupNumber}`,
+        returnUrl: `${appUrl}/profile?walletTopup=return&topup=${encodeURIComponent(topupNumber)}`,
+        metadata: {
+          type: "wallet_topup",
+          topupId: String(topupId),
+          topupNumber,
+          userId: String(req.user.id)
+        },
+        testPaymentId: `test-topup-${topupNumber}`
+      });
+      await pool.query(
+        "UPDATE wallet_topups SET payment_provider = ?, payment_id = ? WHERE id = ?",
+        [payment.provider, payment.paymentId, topupId]
+      );
+      res.status(201).json({
+        message: "Платёж на пополнение создан.",
+        topup: { id: topupId, topupNumber, amount, currency: "RUB", status: "pending" },
+        payment
+      });
+    } catch (error) {
+      await pool.query("UPDATE wallet_topups SET status = 'failed' WHERE id = ? AND status = 'pending'", [topupId]);
+      throw error;
+    }
   } catch (error) {
     next(error);
   }
@@ -3213,19 +3340,27 @@ app.delete("/api/admin/models/:id", requireAuth, requireAdmin, async (req, res, 
 });
 
 app.post("/api/payments/yookassa/webhook", async (req, res, next) => {
-  const connection = await pool.getConnection();
+  let connection;
   try {
     const payload = req.body || {};
     const eventType = String(payload.event || payload.type || "");
-    const object = payload.object || {};
-    const paymentId = String(object.id || "");
-    const eventId = String(payload.id || `${eventType}:${paymentId}:${object.status || ""}`);
+    const webhookObject = payload.object || {};
+    const paymentId = String(webhookObject.id || "");
 
     if (!eventType || !paymentId) {
       res.status(400).json({ error: "Invalid YooKassa webhook payload." });
       return;
     }
 
+    const object = paymentTestMode ? webhookObject : await fetchYookassaPayment(paymentId);
+    if (String(object.id || "") !== paymentId) {
+      res.status(400).json({ error: "Payment verification mismatch." });
+      return;
+    }
+    const eventId = `${eventType}:${paymentId}:${String(object.status || "")}`;
+
+    // Do not occupy a database connection while YooKassa is answering.
+    connection = await pool.getConnection();
     await connection.beginTransaction();
     try {
       await connection.query(
@@ -3240,6 +3375,60 @@ app.post("/api/payments/yookassa/webhook", async (req, res, next) => {
         return;
       }
       throw error;
+    }
+
+    const paymentMetadata = object.metadata && typeof object.metadata === "object" ? object.metadata : {};
+    if (String(paymentMetadata.type || "") === "wallet_topup") {
+      const metadataTopupId = Number(paymentMetadata.topupId || 0);
+      const [topups] = await connection.query(
+        `SELECT * FROM wallet_topups
+         WHERE (payment_provider = 'yookassa' AND payment_id = ?)
+            OR (id = ? AND payment_provider = 'yookassa' AND payment_id IS NULL)
+         FOR UPDATE`,
+        [paymentId, metadataTopupId || 0]
+      );
+      if (!topups.length) {
+        await connection.query("UPDATE payment_events SET processed_at = CURRENT_TIMESTAMP WHERE provider = 'yookassa' AND external_event_id = ?", [eventId]);
+        await connection.commit();
+        res.json({ ok: true, ignored: true });
+        return;
+      }
+
+      const topup = topups[0];
+      if (!topup.payment_id) {
+        await connection.query("UPDATE wallet_topups SET payment_id = ? WHERE id = ? AND payment_id IS NULL", [paymentId, topup.id]);
+      }
+      const paidAmount = toMoney(object.amount?.value);
+      const paidCurrency = String(object.amount?.currency || topup.currency || "RUB").toUpperCase();
+      const isSucceeded = object.status === "succeeded" && object.paid !== false;
+      const metadataMatches = String(paymentMetadata.topupId || "") === String(topup.id)
+        && String(paymentMetadata.topupNumber || "") === String(topup.topup_number)
+        && String(paymentMetadata.userId || "") === String(topup.user_id);
+      const paymentMatches = paidAmount === toMoney(topup.amount)
+        && paidCurrency === String(topup.currency).toUpperCase()
+        && metadataMatches;
+
+      if (isSucceeded && paymentMatches) {
+        await captureWalletTopup(connection, topup);
+      } else if (object.status === "canceled") {
+        await connection.query(
+          "UPDATE wallet_topups SET status = 'canceled', canceled_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'",
+          [topup.id]
+        );
+      } else if (isSucceeded) {
+        await connection.query("UPDATE wallet_topups SET status = 'failed' WHERE id = ? AND status = 'pending'", [topup.id]);
+      }
+
+      await connection.query("UPDATE payment_events SET processed_at = CURRENT_TIMESTAMP WHERE provider = 'yookassa' AND external_event_id = ?", [eventId]);
+      await connection.commit();
+      await writeAudit({
+        action: "wallet_topup_webhook_processed",
+        entityType: "wallet_topup",
+        entityId: topup.id,
+        newData: { eventType, paymentId, status: object.status, paymentMatches }
+      });
+      res.json({ ok: true });
+      return;
     }
 
     const [orders] = await connection.query("SELECT * FROM orders WHERE payment_provider = 'yookassa' AND payment_id = ? FOR UPDATE", [paymentId]);
@@ -3288,10 +3477,10 @@ app.post("/api/payments/yookassa/webhook", async (req, res, next) => {
     await writeAudit({ action: "payment_webhook_processed", entityType: "order", entityId: order.id, newData: { eventType, paymentId } });
     res.json({ ok: true });
   } catch (error) {
-    await connection.rollback();
+    if (connection) await connection.rollback();
     next(error);
   } finally {
-    connection.release();
+    connection?.release();
   }
 });
 

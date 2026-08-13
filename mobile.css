@@ -330,12 +330,36 @@ button {
   }
 
   .mobile-account-button,
-  .mobile-menu-button {
+  .mobile-menu-button,
+  .mobile-wallet-button {
     min-width: var(--tap-size);
     min-height: var(--tap-size);
     padding: 0 12px;
     border-radius: 14px;
     font-size: 0.88rem;
+  }
+
+  .mobile-wallet-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 9px;
+    color: #fff;
+    background: var(--ink);
+  }
+
+  .mobile-wallet-button.hidden {
+    display: none;
+  }
+
+  .mobile-wallet-button svg {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+  }
+
+  .mobile-wallet-button strong {
+    font-size: 0.74rem;
   }
 
   .mobile-account-button {
@@ -1162,6 +1186,10 @@ button {
   }
 
   .mobile-account-button.is-profile .mobile-account-label {
+    display: none;
+  }
+
+  .mobile-wallet-button svg {
     display: none;
   }
 
