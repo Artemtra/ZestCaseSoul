@@ -1300,8 +1300,7 @@ button {
   }
 
   .hero-visual img {
-    top: -22px;
-    width: min(630px, 132%);
+    object-position: center 26%;
   }
 
   .mobile-editor-toolbar {
