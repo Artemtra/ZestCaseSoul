@@ -31,6 +31,7 @@ const yookassaShopId = process.env.YOOKASSA_SHOP_ID || "";
 const yookassaSecretKey = process.env.YOOKASSA_SECRET_KEY || "";
 const defaultDeliveryAmount = Number(process.env.DEFAULT_DELIVERY_AMOUNT || 0);
 const defaultCasePrice = 899;
+const defaultPurchasesDisabledMessage = "Приём заказов временно приостановлен. Вы можете создать и сохранить дизайн — оформить покупку можно будет немного позже.";
 const legalDocumentVersion = "2026-07-29";
 const allowedImageTypes = new Map([
   ["image/png", "png"],
@@ -236,16 +237,22 @@ app.get(`${apiPrefix}/public/routes`, (_req, res) => {
     redirects: publicRedirects
   });
 });
-app.get(`${apiPrefix}/public/config`, (_req, res) => {
-  setPublicCache(res, 3600);
-  res.json({
-    currency: "RUB",
-    defaultDeliveryAmount,
-    maxDesignImages,
-    maxDesignTexts,
-    paymentProvider,
-    paymentTestMode
-  });
+app.get(`${apiPrefix}/public/config`, async (_req, res, next) => {
+  try {
+    const shopAvailability = await getShopAvailability();
+    res.setHeader("Cache-Control", "public, max-age=15, s-maxage=15, must-revalidate");
+    res.json({
+      currency: "RUB",
+      defaultDeliveryAmount,
+      maxDesignImages,
+      maxDesignTexts,
+      paymentProvider,
+      paymentTestMode,
+      ...shopAvailability
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 // Подтверждение владения сайтом для Google Search Console.
 // Не удаляйте и не переименовывайте этот маршрут после подтверждения.
@@ -388,6 +395,23 @@ function invalidatePublicData(...keys) {
     publicDataCache.delete(key);
     publicDataRequests.delete(key);
   }
+}
+
+async function getShopAvailability({ force = false } = {}) {
+  if (force) invalidatePublicData("shop-availability");
+  return getCachedPublicData("shop-availability", async () => {
+    const [rows] = await pool.query(
+      `SELECT purchases_enabled AS purchasesEnabled, disabled_message AS purchasesDisabledMessage
+       FROM shop_settings
+       WHERE id = 1
+       LIMIT 1`
+    );
+    const setting = rows[0];
+    return {
+      purchasesEnabled: setting ? Boolean(setting.purchasesEnabled) : true,
+      purchasesDisabledMessage: String(setting?.purchasesDisabledMessage || defaultPurchasesDisabledMessage)
+    };
+  }, 15_000);
 }
 
 function parseImageDataUrl(dataUrl, allowedTypes = new Set(["png", "jpeg", "jpg", "webp"])) {
@@ -974,6 +998,23 @@ function requireAdmin(req, res, next) {
     return;
   }
   next();
+}
+
+async function requirePurchasesEnabled(_req, res, next) {
+  try {
+    const shopAvailability = await getShopAvailability();
+    if (!shopAvailability.purchasesEnabled) {
+      res.status(503).json({
+        error: shopAvailability.purchasesDisabledMessage,
+        code: "PURCHASES_DISABLED",
+        ...shopAvailability
+      });
+      return;
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
 }
 
 function requireExecutor(req, res, next) {
@@ -1801,7 +1842,7 @@ app.delete("/api/profile/designs", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/api/profile/designs/pay", requireAuth, async (req, res, next) => {
+app.post("/api/profile/designs/pay", requireAuth, requirePurchasesEnabled, async (req, res, next) => {
   try {
     const ids = Array.isArray(req.body.ids)
       ? req.body.ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
@@ -2203,6 +2244,46 @@ app.get("/api/admin/users", requireAuth, requireAdmin, async (_req, res, next) =
   }
 });
 
+app.put("/api/admin/shop-availability", requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    if (typeof req.body.purchasesEnabled !== "boolean") {
+      res.status(400).json({ error: "Выберите, принимать заказы или временно остановить их." });
+      return;
+    }
+    const purchasesEnabled = req.body.purchasesEnabled;
+    const purchasesDisabledMessage = String(req.body.purchasesDisabledMessage || "").trim();
+    if (purchasesDisabledMessage.length < 20 || purchasesDisabledMessage.length > 320) {
+      res.status(400).json({ error: "Сообщение для покупателей должно содержать от 20 до 320 символов." });
+      return;
+    }
+
+    await pool.query(
+      `INSERT INTO shop_settings (id, purchases_enabled, disabled_message, updated_by)
+       VALUES (1, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         purchases_enabled = VALUES(purchases_enabled),
+         disabled_message = VALUES(disabled_message),
+         updated_by = VALUES(updated_by)`,
+      [purchasesEnabled ? 1 : 0, purchasesDisabledMessage, req.user.id]
+    );
+    const shopAvailability = await getShopAvailability({ force: true });
+    await writeAudit({
+      userId: req.user.id,
+      action: purchasesEnabled ? "purchases_enabled" : "purchases_disabled",
+      entityType: "shop_settings",
+      entityId: 1,
+      newData: shopAvailability,
+      req
+    });
+    res.json({
+      message: purchasesEnabled ? "Приём заказов включён." : "Приём заказов приостановлен.",
+      ...shopAvailability
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.put("/api/admin/users/:id/role", requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const id = Number(req.params.id);
@@ -2332,7 +2413,7 @@ app.get("/api/profile/wallet", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/api/profile/wallet/topups", requireAuth, async (req, res, next) => {
+app.post("/api/profile/wallet/topups", requireAuth, requirePurchasesEnabled, async (req, res, next) => {
   try {
     if (!paymentTestMode && (!yookassaShopId || !yookassaSecretKey)) {
       res.status(503).json({ error: "Онлайн-пополнение временно недоступно: платёжный способ ещё не подключён." });

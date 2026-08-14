@@ -1,4 +1,5 @@
 const defaultCasePrice = 899;
+const defaultPurchasesDisabledMessage = "Приём заказов временно приостановлен. Вы можете создать и сохранить дизайн — оформить покупку можно будет немного позже.";
 const fallbackModels = [
   { id: 1, name: "iPhone 15 Pro Max", w: 330, h: 680, r: 56, camera: "iphone-pro", color: "#d8d0c4" },
   { id: 2, name: "iPhone 15 / 15 Plus", w: 326, h: 668, r: 54, camera: "iphone-dual", color: "#d9eef0" },
@@ -52,6 +53,8 @@ let modelPickerModels = [];
 let modelPickerSearchTimer = null;
 let currentUser = null;
 let currentWallet = { balance: 0, reservedBalance: 0, availableBalance: 0, currency: "RUB", transactions: [], pendingTopups: [] };
+let shopAvailability = { purchasesEnabled: true, purchasesDisabledMessage: defaultPurchasesDisabledMessage };
+let shopAvailabilityRequest = null;
 let walletLoadRequest = null;
 let walletLoadedAt = 0;
 let adminUsers = [];
@@ -191,6 +194,8 @@ const stickersStatus = document.querySelector("#stickersStatus");
 const clientView = document.querySelector("#clientView");
 const clientWorkspace = document.querySelector("#clientWorkspace");
 const marketingHero = document.querySelector("#marketingHero");
+const shopAvailabilityNotice = document.querySelector("#shopAvailabilityNotice");
+const shopAvailabilityMessage = document.querySelector("#shopAvailabilityMessage");
 const storefrontContent = document.querySelector("#storefrontContent");
 const legalContent = document.querySelector("#legalContent");
 const legalDocuments = [...document.querySelectorAll("[data-legal-page]")];
@@ -278,6 +283,15 @@ const adminModelForm = document.querySelector("#adminModelForm");
 const adminEditorSelect = document.querySelector("#adminEditorSelect");
 const adminEditorNavButtons = document.querySelectorAll("[data-admin-target]");
 const adminEditorSections = document.querySelectorAll("[data-admin-editor]");
+const adminShopForm = document.querySelector("#adminShopForm");
+const adminPurchasesEnabled = document.querySelector("#adminPurchasesEnabled");
+const adminPurchasesMessage = document.querySelector("#adminPurchasesMessage");
+const adminShopStatus = document.querySelector("#adminShopStatus");
+const adminShopSwitchTitle = document.querySelector("#adminShopSwitchTitle");
+const adminShopSwitchHint = document.querySelector("#adminShopSwitchHint");
+const adminShopPreview = document.querySelector("#adminShopPreview");
+const adminShopSubmitButton = document.querySelector("#adminShopSubmitButton");
+const adminShopMessage = document.querySelector("#adminShopMessage");
 const adminTemplateList = document.querySelector("#adminTemplateList");
 const adminModelList = document.querySelector("#adminModelList");
 const adminTemplatesStatus = document.querySelector("#adminTemplatesStatus");
@@ -1152,6 +1166,7 @@ function showAdminEditor(editorName = "models") {
   if (editorName === "users") loadAdminUsers();
   if (editorName === "orders") loadAdminOrdersPanel();
   if (editorName === "analytics") loadAdminAnalytics();
+  if (editorName === "shop") loadShopAvailability({ force: true });
   if (editorName === "avatars") loadAdminAvatars();
   if (editorName === "messages") {
     loadAdminSupportConversations({ selectFirst: true });
@@ -1380,10 +1395,100 @@ async function adminRequest(path, options = {}) {
     : { raw: await response.text() };
 
   if (!response.ok) {
-    throw new Error(result.error || "Ошибка админ-панели");
+    if (result.code === "PURCHASES_DISABLED") {
+      shopAvailability = {
+        purchasesEnabled: false,
+        purchasesDisabledMessage: String(result.purchasesDisabledMessage || result.error || defaultPurchasesDisabledMessage)
+      };
+      renderShopAvailability();
+    }
+    const error = new Error(result.error || "Ошибка админ-панели");
+    error.details = result;
+    throw error;
   }
 
   return result;
+}
+
+function purchasesAreEnabled() {
+  return shopAvailability.purchasesEnabled !== false;
+}
+
+function renderAdminShopDraft() {
+  if (!adminPurchasesEnabled) return;
+  const enabled = adminPurchasesEnabled.checked;
+  const message = String(adminPurchasesMessage?.value || defaultPurchasesDisabledMessage).trim() || defaultPurchasesDisabledMessage;
+  adminShopStatus.textContent = enabled ? "Принимаем заказы" : "Приём приостановлен";
+  adminShopStatus.classList.toggle("is-paused", !enabled);
+  adminShopSwitchTitle.textContent = enabled ? "Приём заказов включён" : "Приём заказов приостановлен";
+  adminShopSwitchHint.textContent = enabled
+    ? "Покупатели могут оформлять заказы и пополнять кошелёк."
+    : "Новые заказы и пополнения будут заблокированы.";
+  if (adminShopPreview) adminShopPreview.textContent = message;
+}
+
+function renderShopAvailability() {
+  const enabled = purchasesAreEnabled();
+  const message = shopAvailability.purchasesDisabledMessage || defaultPurchasesDisabledMessage;
+  shopAvailabilityNotice?.classList.toggle("hidden", enabled);
+  if (shopAvailabilityMessage) shopAvailabilityMessage.textContent = message;
+  document.body.classList.toggle("purchases-paused", !enabled);
+
+  if (profileWalletTopupButton) profileWalletTopupButton.disabled = !enabled;
+  if (walletTopupSubmitButton) walletTopupSubmitButton.disabled = !enabled;
+  if (walletTopupAmount) walletTopupAmount.disabled = !enabled;
+  document.querySelectorAll("[data-wallet-topup-amount]").forEach((button) => {
+    button.disabled = !enabled;
+  });
+  if (paySingleDesignButton) paySingleDesignButton.disabled = !enabled;
+  updateProfileSelectionActions();
+
+  if (adminPurchasesEnabled) adminPurchasesEnabled.checked = enabled;
+  if (adminPurchasesMessage && document.activeElement !== adminPurchasesMessage) adminPurchasesMessage.value = message;
+  renderAdminShopDraft();
+}
+
+async function loadShopAvailability({ force = false } = {}) {
+  if (shopAvailabilityRequest) return shopAvailabilityRequest;
+  shopAvailabilityRequest = (async () => {
+    const response = await fetch(apiUrl("/api/public/config"), { cache: force ? "no-cache" : "default" });
+    if (!response.ok) throw new Error("Не удалось проверить доступность заказов.");
+    const config = await response.json();
+    shopAvailability = {
+      purchasesEnabled: config.purchasesEnabled !== false,
+      purchasesDisabledMessage: String(config.purchasesDisabledMessage || defaultPurchasesDisabledMessage)
+    };
+    renderShopAvailability();
+    return shopAvailability;
+  })().catch(() => shopAvailability).finally(() => {
+    shopAvailabilityRequest = null;
+  });
+  return shopAvailabilityRequest;
+}
+
+async function saveShopAvailability(event) {
+  event.preventDefault();
+  const purchasesEnabled = Boolean(adminPurchasesEnabled?.checked);
+  const purchasesDisabledMessage = String(adminPurchasesMessage?.value || "").trim();
+  adminShopSubmitButton.disabled = true;
+  adminShopMessage.textContent = "Сохраняю режим магазина…";
+  try {
+    const result = await adminRequest("/api/admin/shop-availability", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ purchasesEnabled, purchasesDisabledMessage })
+    });
+    shopAvailability = {
+      purchasesEnabled: result.purchasesEnabled !== false,
+      purchasesDisabledMessage: String(result.purchasesDisabledMessage || defaultPurchasesDisabledMessage)
+    };
+    renderShopAvailability();
+    adminShopMessage.textContent = result.message;
+  } catch (error) {
+    adminShopMessage.textContent = error.message;
+  } finally {
+    adminShopSubmitButton.disabled = false;
+  }
 }
 
 function supportGuestToken() {
@@ -1922,18 +2027,22 @@ function openWalletTopupDialog() {
     openAuth("login");
     return;
   }
-  if (walletTopupMessage) walletTopupMessage.textContent = "";
+  if (walletTopupMessage) walletTopupMessage.textContent = purchasesAreEnabled() ? "" : shopAvailability.purchasesDisabledMessage;
   if (walletTopupAmount && !Number(walletTopupAmount.value)) walletTopupAmount.value = "1000";
   updateWalletTopupSummary();
   if (!walletTopupDialog?.open) {
     if (typeof walletTopupDialog.showModal === "function") walletTopupDialog.showModal();
     else walletTopupDialog.setAttribute("open", "");
   }
-  walletTopupAmount?.focus();
+  if (purchasesAreEnabled()) walletTopupAmount?.focus();
 }
 
 async function submitWalletTopup(event) {
   event.preventDefault();
+  if (!purchasesAreEnabled()) {
+    walletTopupMessage.textContent = shopAvailability.purchasesDisabledMessage;
+    return;
+  }
   const amount = Number(walletTopupAmount?.value || 0);
   walletTopupSubmitButton.disabled = true;
   walletTopupMessage.textContent = "Создаём безопасный платёж...";
@@ -2460,11 +2569,13 @@ async function saveDesignToProfile() {
 function openSaveChoiceDialog(message = "") {
   if (!saveChoiceDialog) return;
   const unavailable = isModelUnavailable();
+  const purchasesPaused = !purchasesAreEnabled();
   saveChoiceStatus.textContent = message || (unavailable
     ? "Эта модель временно недоступна для заказа, но вы можете скачать готовый PNG."
-    : "");
+    : purchasesPaused ? shopAvailability.purchasesDisabledMessage : "");
   saveFileChoiceButton.disabled = false;
   saveProfileChoiceButton.disabled = unavailable;
+  saveProfileChoiceButton.textContent = purchasesPaused ? "Сохранить в профиль" : "Сохранить и заказать";
   if (typeof saveChoiceDialog.showModal === "function") saveChoiceDialog.showModal();
   else saveChoiceDialog.setAttribute("open", "");
 }
@@ -2545,6 +2656,11 @@ async function saveDesignFromChoiceToProfile() {
   if (!savedDesign) return;
 
   saveChoiceDialog.close();
+  if (!purchasesAreEnabled()) {
+    await openProfile();
+    profileMeta.textContent = `Дизайн сохранён. ${shopAvailability.purchasesDisabledMessage}`;
+    return;
+  }
   try {
     const orderStarted = await payProfileDesigns([savedDesign]);
     if (orderStarted === false) {
@@ -5565,7 +5681,7 @@ function updateProfileSelectionActions() {
   const count = selectedProfileDesignIds.size;
   if (selectedDesignsCount) selectedDesignsCount.textContent = `Выбрано: ${count}`;
   profileSelectionBar?.classList.toggle("hidden", count < 2);
-  if (paySelectedDesignsButton) paySelectedDesignsButton.disabled = count < 2;
+  if (paySelectedDesignsButton) paySelectedDesignsButton.disabled = count < 2 || !purchasesAreEnabled();
   if (deleteSelectedDesignsButton) deleteSelectedDesignsButton.disabled = count < 2;
   profileSingleActions?.classList.toggle("hidden", count !== 1);
   refreshProfileCards();
@@ -5917,14 +6033,24 @@ async function submitCategoryForm(event, endpoint, message) {
 async function payProfileDesigns(designs) {
   const ids = designs.map((design) => design.id);
   if (ids.length === 0) return false;
+  if (!purchasesAreEnabled()) {
+    profileMeta.textContent = shopAvailability.purchasesDisabledMessage;
+    return false;
+  }
   const checkout = await openCheckoutDialog(designs);
   if (!checkout) return false;
 
-  const result = await adminRequest("/api/profile/designs/pay", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ids, ...checkout })
-  });
+  let result;
+  try {
+    result = await adminRequest("/api/profile/designs/pay", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, ...checkout })
+    });
+  } catch (error) {
+    profileMeta.textContent = error.message;
+    return false;
+  }
   if (result.payment?.confirmationUrl) {
     window.location.href = result.payment.confirmationUrl;
     return true;
@@ -6815,6 +6941,9 @@ adminEditorSelect?.addEventListener("change", () => {
 adminEditorNavButtons.forEach((button) => button.addEventListener("click", () => {
   showAdminEditor(button.dataset.adminTarget);
 }));
+adminShopForm?.addEventListener("submit", saveShopAvailability);
+adminPurchasesEnabled?.addEventListener("change", renderAdminShopDraft);
+adminPurchasesMessage?.addEventListener("input", renderAdminShopDraft);
 openSupportChatButton?.addEventListener("click", openSupportChat);
 openSupportChatButton?.addEventListener("blur", () => {
   openSupportChatButton.classList.remove("is-returned-focus");
@@ -7342,6 +7471,7 @@ async function init() {
     loadModels(),
     loadTemplates(),
     loadStickers(),
+    loadShopAvailability(),
     checkSession()
   ]);
   await handleAuthLinks();

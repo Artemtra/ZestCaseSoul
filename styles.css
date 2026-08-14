@@ -261,6 +261,49 @@ h1 {
   border: 1px solid var(--line);
 }
 
+.shop-availability-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  margin: -12px 0 28px;
+  padding: 16px 18px;
+  color: #682016;
+  border: 1px solid rgba(163, 11, 32, 0.24);
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(255, 239, 226, 0.96), rgba(255, 250, 244, 0.9));
+  box-shadow: 0 14px 34px rgba(125, 39, 26, 0.09);
+}
+
+.shop-availability-mark {
+  padding: 8px 10px;
+  color: #fff;
+  border-radius: 10px;
+  background: var(--accent-dark);
+  font-family: "Unbounded", sans-serif;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.shop-availability-notice > div {
+  display: grid;
+  gap: 3px;
+}
+
+.shop-availability-notice strong {
+  font-family: "Unbounded", sans-serif;
+  font-size: 0.9rem;
+}
+
+.shop-availability-notice p {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .header-wallet-button {
   display: inline-flex;
   min-height: 42px;
@@ -809,6 +852,234 @@ h1 {
   color: var(--muted);
   font-size: 0.76rem;
   font-weight: 800;
+}
+
+.shop-control {
+  gap: 22px;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 92% 8%, rgba(141, 224, 207, 0.28), transparent 17rem),
+    rgba(255, 250, 240, 0.78);
+}
+
+.shop-control-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.shop-control-head > div {
+  max-width: 720px;
+}
+
+.shop-control-head h3 {
+  margin: 3px 0 8px;
+  font-family: "Unbounded", sans-serif;
+  font-size: clamp(1.45rem, 3vw, 2.3rem);
+  letter-spacing: -0.05em;
+}
+
+.shop-control-head p:last-child {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.shop-status-pill {
+  flex: 0 0 auto;
+  padding: 9px 12px;
+  color: #0f5f50;
+  border: 1px solid rgba(15, 95, 80, 0.22);
+  border-radius: 999px;
+  background: rgba(141, 224, 207, 0.34);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.shop-status-pill.is-paused {
+  color: #8f1625;
+  border-color: rgba(163, 11, 32, 0.2);
+  background: rgba(237, 22, 49, 0.1);
+}
+
+.shop-control-form {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.82fr) minmax(340px, 1.18fr);
+  gap: 16px;
+}
+
+.shop-status-switch,
+.shop-message-field,
+.shop-message-preview {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.shop-status-switch {
+  display: grid;
+  min-height: 156px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 20px;
+  cursor: pointer;
+}
+
+.shop-status-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.shop-switch-track {
+  position: relative;
+  width: 64px;
+  height: 36px;
+  border-radius: 999px;
+  background: #d85e6e;
+  box-shadow: inset 0 0 0 1px rgba(16, 39, 45, 0.1);
+  transition: background 160ms ease;
+}
+
+.shop-switch-track > span {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 4px 10px rgba(16, 39, 45, 0.24);
+  transition: transform 160ms ease;
+}
+
+.shop-status-switch input:checked + .shop-switch-track {
+  background: #39a58d;
+}
+
+.shop-status-switch input:checked + .shop-switch-track > span {
+  transform: translateX(28px);
+}
+
+.shop-status-switch input:focus-visible + .shop-switch-track {
+  outline: 3px solid rgba(120, 206, 232, 0.55);
+  outline-offset: 3px;
+}
+
+.shop-switch-copy {
+  display: grid;
+  gap: 5px;
+}
+
+.shop-switch-copy strong {
+  font-size: 0.95rem;
+}
+
+.shop-switch-copy small,
+.shop-message-field small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.shop-message-field {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+}
+
+.shop-message-field > span {
+  font-weight: 900;
+}
+
+.shop-message-field textarea {
+  width: 100%;
+  min-height: 104px;
+  padding: 12px 13px;
+  resize: vertical;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  outline: none;
+  background: #fffdf7;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.shop-message-field textarea:focus {
+  border-color: rgba(16, 39, 45, 0.42);
+  box-shadow: 0 0 0 3px rgba(120, 206, 232, 0.2);
+}
+
+.shop-message-preview {
+  grid-column: 1 / -1;
+  padding: 16px 18px;
+  border-color: rgba(163, 11, 32, 0.16);
+  background: rgba(255, 241, 232, 0.76);
+}
+
+.shop-message-preview span {
+  color: #8f1625;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.shop-message-preview p {
+  margin: 7px 0 0;
+  font-weight: 750;
+  line-height: 1.55;
+}
+
+.shop-control-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 16px;
+}
+
+.shop-control-actions .admin-message {
+  flex: 1;
+}
+
+.purchases-paused :is(#profileWalletTopupButton, #paySelectedDesignsButton, #paySingleDesignButton, #walletTopupSubmitButton) {
+  cursor: not-allowed;
+}
+
+@media (max-width: 760px) {
+  .shop-availability-notice {
+    margin: -4px 0 18px;
+    padding: 14px;
+  }
+
+  .shop-control-head,
+  .shop-control-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .shop-status-pill {
+    width: fit-content;
+  }
+
+  .shop-control-form {
+    grid-template-columns: 1fr;
+  }
+
+  .shop-message-preview,
+  .shop-control-actions {
+    grid-column: auto;
+  }
+
+  .shop-control-actions .primary {
+    width: 100%;
+  }
 }
 
 .stickers-box {

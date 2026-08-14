@@ -66,6 +66,10 @@ const server = createServer(async (request, response) => {
   try {
     const pathname = new URL(request.url, "http://127.0.0.1").pathname;
     const publicApiFixtures = {
+      "/api/public/config": {
+        purchasesEnabled: true,
+        purchasesDisabledMessage: "Приём заказов временно приостановлен. Вы можете создать и сохранить дизайн — оформить покупку можно будет немного позже."
+      },
       "/api/phone-model-categories": [],
       "/api/template-categories": [{ id: 1, name: "Тестовые макеты", slug: "testovye-makety", sortOrder: 1, itemsCount: 3 }],
       "/api/templates": [
@@ -558,7 +562,7 @@ try {
       if (adminNavigationState.selected !== "templateCategories" || adminNavigationState.active !== "templateCategories") {
         failures.push(`${width}x${height}: admin category navigation did not activate the selected section`);
       }
-      if (adminNavigationState.editorButtons !== 8 || adminNavigationState.categoryButtons !== 3) {
+      if (adminNavigationState.editorButtons !== 9 || adminNavigationState.categoryButtons !== 3) {
         failures.push(`${width}x${height}: admin navigation groups contain the wrong number of actions`);
       }
       if (!adminNavigationState.visibleEditors.length || adminNavigationState.visibleEditors.some((value) => value !== "templateCategories")) {

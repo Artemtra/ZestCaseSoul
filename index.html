@@ -52,8 +52,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Marck+Script&family=Russo+One&family=Unbounded:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/styles.css?v=20260814-hero-image-v29">
-    <link rel="stylesheet" href="/mobile.css?v=20260814-hero-image-v25">
+    <link rel="stylesheet" href="/styles.css?v=20260814-purchases-v30">
+    <link rel="stylesheet" href="/mobile.css?v=20260814-purchases-v26">
   </head>
   <body>
     <main class="shell" id="top">
@@ -105,6 +105,14 @@
         <button class="mobile-account-link" type="button" data-mobile-nav="account"><span class="mobile-menu-profile-icon" aria-hidden="true">●</span><span data-mobile-account-label>Войти</span></button>
         <button class="mobile-menu-logout hidden" type="button" data-mobile-auth-only data-mobile-nav="logout">Выйти</button>
       </nav>
+
+      <aside class="shop-availability-notice hidden" id="shopAvailabilityNotice" role="status" aria-live="polite">
+        <span class="shop-availability-mark" aria-hidden="true">Пауза</span>
+        <div>
+          <strong>Покупка временно недоступна</strong>
+          <p id="shopAvailabilityMessage">Приём заказов временно приостановлен. Вы можете создать и сохранить дизайн — оформить покупку можно будет немного позже.</p>
+        </div>
+      </aside>
 
       <section class="hero marketing-hero" id="marketingHero" aria-labelledby="heroTitle">
         <div class="hero-copy">
@@ -734,6 +742,7 @@
                 <div><strong id="adminEditorsTitle">Редакторы</strong><small>Добавление и управление</small></div>
               </div>
               <nav class="admin-nav-items" aria-label="Редакторы админки">
+                <button type="button" data-admin-target="shop"><span aria-hidden="true">◈</span><span><strong>Приём заказов</strong><small>Оплата и доступность</small></span></button>
                 <button type="button" data-admin-target="analytics"><span aria-hidden="true">↗</span><span><strong>Аналитика</strong><small>Продажи и заказы</small></span></button>
                 <button type="button" data-admin-target="messages"><span aria-hidden="true">✉</span><span><strong>Сообщения</strong><small>Чаты с клиентами</small></span></button>
                 <button type="button" data-admin-target="models"><span aria-hidden="true">▣</span><span><strong>Модели</strong><small>Телефоны и камеры</small></span></button>
@@ -760,6 +769,7 @@
 
           <select class="admin-editor-select-state" id="adminEditorSelect" tabindex="-1" aria-hidden="true">
             <optgroup label="Редакторы">
+              <option value="shop">Приём заказов</option>
               <option value="analytics">Аналитика</option>
               <option value="messages">Сообщения</option>
               <option value="models">Модели телефонов</option>
@@ -778,6 +788,40 @@
         </section>
 
         <div class="admin-grid">
+          <section class="admin-box panel shop-control" data-admin-editor="shop" aria-labelledby="shopControlTitle">
+            <div class="shop-control-head">
+              <div>
+                <p class="eyebrow">Работа магазина</p>
+                <h3 id="shopControlTitle">Приём заказов</h3>
+                <p>Одним переключателем остановите новые заказы и пополнения. Уже созданные платежи и работа с текущими заказами продолжат обрабатываться.</p>
+              </div>
+              <span class="shop-status-pill" id="adminShopStatus">Принимаем заказы</span>
+            </div>
+            <form class="shop-control-form" id="adminShopForm">
+              <label class="shop-status-switch" for="adminPurchasesEnabled">
+                <input id="adminPurchasesEnabled" name="purchasesEnabled" type="checkbox" checked>
+                <span class="shop-switch-track" aria-hidden="true"><span></span></span>
+                <span class="shop-switch-copy">
+                  <strong id="adminShopSwitchTitle">Приём заказов включён</strong>
+                  <small id="adminShopSwitchHint">Покупатели могут оформлять заказы и пополнять кошелёк.</small>
+                </span>
+              </label>
+              <label class="shop-message-field" for="adminPurchasesMessage">
+                <span>Сообщение для покупателей</span>
+                <textarea id="adminPurchasesMessage" name="purchasesDisabledMessage" rows="4" minlength="20" maxlength="320" required>Приём заказов временно приостановлен. Вы можете создать и сохранить дизайн — оформить покупку можно будет немного позже.</textarea>
+                <small>Появится на сайте и при попытке начать оплату.</small>
+              </label>
+              <div class="shop-message-preview" aria-live="polite">
+                <span>Так увидит покупатель</span>
+                <p id="adminShopPreview">Приём заказов временно приостановлен. Вы можете создать и сохранить дизайн — оформить покупку можно будет немного позже.</p>
+              </div>
+              <div class="shop-control-actions">
+                <button class="primary" id="adminShopSubmitButton" type="submit">Сохранить режим</button>
+                <p class="admin-message" id="adminShopMessage" role="status" aria-live="polite"></p>
+              </div>
+            </form>
+          </section>
+
           <section class="admin-analytics" data-admin-editor="analytics" aria-labelledby="analyticsTitle">
             <div class="analytics-head">
               <div>
@@ -1400,7 +1444,7 @@
         <span class="corner-cat-face"><span class="corner-cat-eyes"><i class="corner-cat-eye"><b class="corner-cat-pupil"></b></i><i class="corner-cat-eye corner-cat-eye-right"><b class="corner-cat-pupil"></b></i></span><i class="corner-cat-nose"></i><i class="corner-cat-mouth"></i><span class="corner-cat-whiskers corner-cat-whiskers-left"><i></i><i></i><i></i></span><span class="corner-cat-whiskers corner-cat-whiskers-right"><i></i><i></i><i></i></span></span>
       </button>
     </div>
-    <script src="/script.js?v=20260814-wallet-topup-v28"></script>
+    <script src="/script.js?v=20260814-purchases-v29"></script>
     <script src="/mobile-ui.js?v=20260730-support-chat-v21"></script>
 <script>
   (() => {
